@@ -12,7 +12,7 @@ import { streamDrafts, refineDraft } from '@/lib/draft-client';
 import { PageHead } from '@/components/PageHead';
 import { QRCodeSVG } from 'qrcode.react';
 
-interface ExtendedTestResult extends TestResult { isTriaged?: boolean; triageAction?: string; triagePriority?: string; }
+type ExtendedTestResult = TestResult;
 
 // --- MINIFIED CSS ---
 const TRIAGE_CSS = `

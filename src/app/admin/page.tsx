@@ -15,7 +15,7 @@ import { deleteRunSafe, updateRunsBatch } from '@/lib/firestoreHelpers';
 // ─── Sidebar is NOT imported here — it lives in layout.tsx ───
 
 type ViewState = 'LIST' | 'DETAIL';
-interface ExtendedTestResult extends TestResult { isTriaged?: boolean; }
+type ExtendedTestResult = TestResult;
 
 const getMediaType = (url: string) => {
   if (url.toLowerCase().match(/\.(mp4|webm|ogg|mov)(?=\?|$)/i)) return 'video';
