@@ -518,10 +518,10 @@ export default function AdminPage() {
   };
 
   const savePlatforms = async () => {
-    const projectRuns = allRuns.filter(r => r.projectName === selectedProjectName);
-    await Promise.all(projectRuns.map(run =>
-      updateDoc(doc(db, 'testRuns', run.id), { platforms: platformEditorList })
-    ));
+    const projectRuns = allRuns.filter(r => r.projectName === selectedProjectName && r.id);
+await Promise.all(projectRuns.map(run =>
+  updateDoc(doc(db, 'testRuns', run.id!), { platforms: platformEditorList })
+));
     setPlatformEditorOpen(false);
     triggerSaveFlash();
     showToast('Platforms updated · live to all runs');
