@@ -147,6 +147,54 @@ export interface MessageThread {
   hasReply: boolean;
 }
 
+// ─── Triage UI state ───
+// Used by /pm page (Triage Board) to track in-progress triage decisions
+// before they're committed to Firestore.
+
+export interface PendingTriageAction {
+  action: 'Ticketed' | 'Snoozed' | 'Reviewed' | 'Dismissed';
+  priority?: 'Critical' | 'High' | 'Medium' | 'Low' | 'Enhancement';
+  // When set, this triage action is part of a step-level ticket (one ticket
+  // for all the testers who reported the same step). Value is the step ID.
+  linkedStepTicket?: string;
+}
+
+export interface PriorityPopoverState {
+  // Either reviewKey (tester-level ticket) or stepId (step-level ticket).
+  reviewKey?: string;
+  stepId?: string;
+  tempPriority: 'Critical' | 'High' | 'Medium' | 'Low' | 'Enhancement';
+}
+
+export interface JiraDraftingModalState {
+  open: boolean;
+  tickets: AIDraftedTicket[];
+  activeTicketId: string | null;
+  refining: boolean;
+  pushing: boolean;
+}
+
+export interface ContactModalState {
+  tester: {
+    id: string;
+    runId: string;
+    name: string;
+    email?: string;
+    initials: string;
+    color: string;
+  };
+  runId: string;
+  // Step context: null when contacting a tester generally (not about a specific step).
+  stepId: string | null;
+  stepIndex: number | null;
+  stepAction: string | null;
+  originalResult: TestResult | null;
+  // Default channel selected when the modal opens (defaults to 'in-app' if unset).
+  initialChannel?: 'in-app' | 'mailto';
+  // The thread being viewed, if continuing a conversation. Null when composing a new message.
+  activeThread: MessageThread | null;
+}
+
 // ─── AI-drafted ticket ───
 export interface AIDraftedTicket {
   // Identity
@@ -154,6 +202,11 @@ export interface AIDraftedTicket {
   runIds: string[];                    // testRunData.id values for the source runs
   stepId: string;
   stepIndex: number;
+
+  // Platform context — set when this ticket is for a specific platform within
+  // a cross-platform project. Used to disambiguate "Step 3 on iOS" from
+  // "Step 3 on Android" in Jira titles.
+  platform?: string;
 
   // Source data — what the AI was given
   sources: TicketSource[];
