@@ -509,7 +509,7 @@ export default function AdminPage() {
         && r.testCycle === templateRun.testCycle 
         && r.testerName === 'Unassigned'
       );
-      if (unassignedRun) await deleteDoc(doc(db, 'testRuns', unassignedRun.id));
+      if (unassignedRun?.id) await deleteDoc(doc(db, 'testRuns', unassignedRun.id));
       
       setNewTesterName('');
       setActivePopover(null);
