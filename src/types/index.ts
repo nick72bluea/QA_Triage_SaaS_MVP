@@ -12,6 +12,11 @@ export interface TestStep {
   preConditions?: string;
   mediaUrls?: string[];
   referenceLinks?: string[];
+
+  // Cross-platform targeting. Empty/undefined = applies to all platforms (default).
+  // Populated = only applies to the listed platforms.
+  // Only meaningful when the parent TestRunData has platforms defined.
+  appliesTo?: string[];
 }
 
 export interface TestResult {
@@ -43,10 +48,15 @@ export interface TestRunData {
   environment?: string;
   testCycle?: string;
 
-  // Platforms this run covers. Empty/undefined for single-platform runs;
-  // populated (e.g. ['iOS', 'Android', 'Chrome']) when a project tests across
-  // multiple platforms and creates one run per platform per tester.
+  // Cross-platform support.
+  // `platforms` — the list of platforms this project covers (e.g. ['iOS', 'Android']).
+  //                Empty/undefined for single-platform runs. Same value across all
+  //                runs of the same project.
+  // `platform`  — which specific platform THIS run is for (one of `platforms`).
+  //                Used when a project tests across multiple platforms and creates
+  //                one run per platform per tester.
   platforms?: string[];
+  platform?: string;
 
   steps: TestStep[];
   results?: Record<string, TestResult>;

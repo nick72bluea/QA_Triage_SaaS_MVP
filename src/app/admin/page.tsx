@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, addDoc, serverTimestamp, doc, onSnapshot, deleteDoc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, onSnapshot, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '@/lib/firebase';
 import { TestRunData, TestStep, TestResult } from '@/types';
@@ -10,6 +10,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { PageHead } from '@/components/PageHead';
 import { useWorkspaceSettings } from '@/hooks/useWorkspaceSettings';
 import { brandingSnapshotFrom } from '@/types/workspace';
+import { deleteRunSafe, updateRunsBatch } from '@/lib/firestoreHelpers';
 
 // ─── Sidebar is NOT imported here — it lives in layout.tsx ───
 
@@ -509,7 +510,8 @@ export default function AdminPage() {
         && r.testCycle === templateRun.testCycle 
         && r.testerName === 'Unassigned'
       );
-      if (unassignedRun?.id) await deleteDoc(doc(db, 'testRuns', unassignedRun.id));
+      // Uses deleteRunSafe — no-ops if id is undefined
+      await deleteRunSafe(unassignedRun?.id);
       
       setNewTesterName('');
       setActivePopover(null);
@@ -518,10 +520,8 @@ export default function AdminPage() {
   };
 
   const savePlatforms = async () => {
-    const projectRuns = allRuns.filter(r => r.projectName === selectedProjectName && r.id);
-await Promise.all(projectRuns.map(run =>
-  updateDoc(doc(db, 'testRuns', run.id!), { platforms: platformEditorList })
-));
+    const projectRuns = allRuns.filter(r => r.projectName === selectedProjectName);
+    await updateRunsBatch(projectRuns, { platforms: platformEditorList });
     setPlatformEditorOpen(false);
     triggerSaveFlash();
     showToast('Platforms updated · live to all runs');
@@ -540,7 +540,10 @@ await Promise.all(projectRuns.map(run =>
 
   const updateMasterScript = async (updatedSteps: TestStep[]) => {
     const projectRuns = allRuns.filter(r => r.projectName === selectedProjectName);
-    await Promise.all(projectRuns.map(run => updateDoc(doc(db, 'testRuns', run.id), { steps: updatedSteps })));
+    const result = await updateRunsBatch(projectRuns, { steps: updatedSteps });
+    if (result.skipped > 0) {
+      console.warn(`Master script update skipped ${result.skipped} run(s) with no id`);
+    }
     triggerSaveFlash();
   };
 
@@ -823,7 +826,7 @@ await Promise.all(projectRuns.map(run =>
     const project = projects.find(p => p.name === selectedProjectName);
     if (!project) return null;
     const templateRun = project.runs[0] as TestRunData;
-    const attachmentCount = templateRun.steps.reduce((acc, step) => acc + (step.mediaUrls?.length || 0) + (step.referenceLinks?.length || 0), 0);
+    const attachmentCount = templateRun.steps.reduce((acc: number, step: TestStep) => acc + (step.mediaUrls?.length || 0) + (step.referenceLinks?.length || 0), 0);
     const activeTesters = project.runs.filter((r: any) => r.testerName !== 'Unassigned');
 
     return (
@@ -886,7 +889,7 @@ await Promise.all(projectRuns.map(run =>
               <div><b>Edits push live</b> to active testers. Their existing pass/fail results are preserved against the original text. Add or remove steps with care.</div>
             </div>
             <div className="script-list">
-              {templateRun.steps.map((step, idx) => {
+              {templateRun.steps.map((step: TestStep, idx: number) => {
                 const n = idx + 1;
                 const nn = n < 10 ? '0' + n : '' + n;
                 return (
@@ -929,14 +932,14 @@ await Promise.all(projectRuns.map(run =>
                     </div>
                     <div className="attachments-strip">
                       <div className="attachments-wrap">
-                        {step.mediaUrls?.map((url, imgIdx) => (
+                        {step.mediaUrls?.map((url: string, imgIdx: number) => (
                           <div className={`attachment ${getMediaType(url)}`} key={imgIdx} onClick={() => window.open(url, '_blank')}>
                             {getMediaType(url) === 'video' ? (<><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg><span className="attachment-duration">VID</span></>) :
                              getMediaType(url) === 'pdf' ? (<div style={{ color: '#3d5a80', fontSize: '10px', fontWeight: 'bold' }}>PDF</div>) :
                              (<div className="img-bg" style={{ backgroundImage: `url(${url})` }} />)}
                           </div>
                         ))}
-                        {step.referenceLinks?.map((url, linkIdx) => (
+                        {step.referenceLinks?.map((url: string, linkIdx: number) => (
                           <div className="attachment link" key={linkIdx} onClick={() => window.open(url, '_blank')}>
                             <div className="link-ico">URL</div>
                             <div className="link-info">
@@ -1102,7 +1105,7 @@ await Promise.all(projectRuns.map(run =>
                       <span>This step applies to</span>
                     </label>
                     <div className="platform-applies-chips" style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                      {(projects.find(p => p.name === selectedProjectName)?.runs[0]?.platforms || []).map(p => {
+                      {(projects.find(p => p.name === selectedProjectName)?.runs[0]?.platforms || []).map((p: string) => {
                         const isApplied = !editingStep.appliesTo || editingStep.appliesTo.length === 0
                           ? true // empty appliesTo = applies to all
                           : editingStep.appliesTo.includes(p);
@@ -1115,15 +1118,15 @@ await Promise.all(projectRuns.map(run =>
                             }}
                             onClick={() => {
                               let newAppliesTo: string[];
-                              const templateRun = projects.find(proj => proj.name === selectedProjectName)?.runs[0] as TestRunData;
+                              const templateRunInner = projects.find(proj => proj.name === selectedProjectName)?.runs[0] as TestRunData;
                               if (!editingStep.appliesTo || editingStep.appliesTo.length === 0) {
-                                newAppliesTo = templateRun.platforms!.filter(x => x !== p);
+                                newAppliesTo = templateRunInner.platforms!.filter(x => x !== p);
                               } else {
                                 newAppliesTo = editingStep.appliesTo.includes(p)
                                   ? editingStep.appliesTo.filter(x => x !== p)
                                   : [...editingStep.appliesTo, p];
                               }
-                              if (newAppliesTo.length === templateRun.platforms!.length) {
+                              if (newAppliesTo.length === templateRunInner.platforms!.length) {
                                 newAppliesTo = [];
                               }
                               setEditingStep({
@@ -1218,7 +1221,7 @@ await Promise.all(projectRuns.map(run =>
             </header>
             <div className="modal-body">
               <p style={{ fontSize: '13px', color: 'var(--ink-soft)', marginBottom: '20px' }}>
-                Add or remove platforms for this project. Note: Removing a platform won't delete existing runs tagged with it, but it will hide it from future tester assignments.
+                Add or remove platforms for this project. Note: Removing a platform won&apos;t delete existing runs tagged with it, but it will hide it from future tester assignments.
               </p>
               <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
                 {platformEditorList.map(p => (
