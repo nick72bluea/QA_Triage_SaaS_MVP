@@ -42,6 +42,12 @@ export interface TestRunData {
   testerEmail?: string;
   environment?: string;
   testCycle?: string;
+
+  // Platforms this run covers. Empty/undefined for single-platform runs;
+  // populated (e.g. ['iOS', 'Android', 'Chrome']) when a project tests across
+  // multiple platforms and creates one run per platform per tester.
+  platforms?: string[];
+
   steps: TestStep[];
   results?: Record<string, TestResult>;
   createdAt?: any;
