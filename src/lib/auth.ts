@@ -26,13 +26,17 @@ microsoftProvider.setCustomParameters({ prompt: "select_account" });
 
 // ─── MAGIC LINK ──────────────────────────────────────────────────────────────
 
-const ACTION_CODE_SETTINGS = {
-  url: `${process.env.NEXT_PUBLIC_APP_URL}/login/verify`,
-  handleCodeInApp: true,
-};
-
 export async function sendMagicLink(email: string): Promise<void> {
-  await sendSignInLinkToEmail(auth, email, ACTION_CODE_SETTINGS);
+  const baseUrl =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    (typeof window !== "undefined" ? window.location.origin : "");
+
+  const actionCodeSettings = {
+    url: `${baseUrl}/login/verify`,
+    handleCodeInApp: true,
+  };
+
+  await sendSignInLinkToEmail(auth, email, actionCodeSettings);
   if (typeof window !== "undefined") {
     window.localStorage.setItem("emailForSignIn", email);
   }
