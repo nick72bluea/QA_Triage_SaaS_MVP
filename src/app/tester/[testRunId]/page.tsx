@@ -1261,8 +1261,8 @@ export default function TesterExecutionEngine() {
     setQrTargetPanel(target);
     
     // TEMPORARY FOR LOCAL TESTING - Replace with your actual ngrok URL
-    // setUploadUrl(`${window.location.origin}/mobile-upload/${token}`);
-    setUploadUrl(`https://3f8c-2a00-23cc-f62f-d101-a03c-930f-25a6-c895.ngrok-free.app/mobile-upload/${token}`); 
+    setUploadUrl(`${window.location.origin}/mobile-upload/${token}`);
+    // setUploadUrl(`https://3f8c-2a00-23cc-f62f-d101-a03c-930f-25a6-c895.ngrok-free.app/mobile-upload/${token}`); 
     
     setQrModalOpen(true);
   };
