@@ -38,7 +38,7 @@ export async function hashPin(pin: string): Promise<string> {
   const hashBuf = await crypto.subtle.deriveBits(
     {
       name: "PBKDF2",
-      salt: saltBuf,
+      salt: saltBuf as BufferSource,
       iterations: ITERATIONS,
       hash: HASH_ALG,
     },
@@ -68,7 +68,7 @@ export async function verifyPin(pin: string, stored: string): Promise<boolean> {
     const hashBuf = await crypto.subtle.deriveBits(
       {
         name: "PBKDF2",
-        salt: saltBuf,
+        salt: saltBuf as BufferSource,
         iterations: ITERATIONS,
         hash: HASH_ALG,
       },
