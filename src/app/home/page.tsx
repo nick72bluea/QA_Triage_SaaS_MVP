@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { collection, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, serverTimestamp, query, where } from 'firebase/firestore';
 import Papa from 'papaparse';
 import { db } from '@/lib/firebase';
+import { useAuth } from '@/contexts/AuthContext';
 import { TestRunData, TestStep, ScriptPath, WizardScriptStep, SavedScriptSummary } from '@/types';
 import { useRouter } from 'next/navigation';
 
@@ -353,6 +354,7 @@ HomeStyles.displayName = 'HomeStyles';
 
 export default function PMHomeDashboard() {
   const router = useRouter();
+  const { currentAccountId } = useAuth();
 
   // Only gates browser-specific values — NOT the whole UI
   const [hydrated, setHydrated] = useState(false);
@@ -398,10 +400,13 @@ export default function PMHomeDashboard() {
     if (h >= 12 && h < 18) setGreeting('Good afternoon');
     else if (h >= 18) setGreeting('Good evening');
 
+    if (!currentAccountId) return;
+
     // Stable Firestore deduplication
-    const unsubscribe = onSnapshot(collection(db, 'testRuns'), (snapshot) => {
+    const q = query(collection(db, 'testRuns'), where('accountId', '==', currentAccountId));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
       const runsData = snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as TestRunData[];
-      
+
       setAllRuns(prev => {
         if (prev.length !== runsData.length) return runsData;
         for (let i = 0; i < prev.length; i++) {
@@ -412,7 +417,7 @@ export default function PMHomeDashboard() {
       });
     });
     return () => unsubscribe();
-  }, []);
+  }, [currentAccountId]);
 
   // Sync new tester platforms state with defined platforms
   useEffect(() => {
@@ -597,6 +602,7 @@ export default function PMHomeDashboard() {
   };
 
   const launchProject = async () => {
+    if (!currentAccountId) { alert('Not authenticated — please reload.'); return; }
     setIsLaunching(true);
     try {
       let finalSteps: TestStep[] = [];
@@ -620,13 +626,14 @@ export default function PMHomeDashboard() {
         const targetTesters = wizTesters.length > 0 ? wizTesters.map(t => t.name) : ['Unassigned'];
         for (const name of targetTesters) {
           await addDoc(collection(db, 'testRuns'), {
-            projectName: wizName, 
-            testerName: name, 
+            projectName: wizName,
+            testerName: name,
             environment: wizEnv,
-            testCycle: wizCycle, 
-            steps: finalSteps, 
-            createdAt: serverTimestamp(), 
-            results: {}
+            testCycle: wizCycle,
+            steps: finalSteps,
+            createdAt: serverTimestamp(),
+            results: {},
+            accountId: currentAccountId,
           });
         }
       } else {
@@ -644,6 +651,7 @@ export default function PMHomeDashboard() {
               results: {},
               platform,
               platforms: wizPlatforms,
+              accountId: currentAccountId,
             });
           }
         } else {
@@ -659,6 +667,7 @@ export default function PMHomeDashboard() {
                 results: {},
                 platform,
                 platforms: wizPlatforms,
+                accountId: currentAccountId,
               });
             }
           }
