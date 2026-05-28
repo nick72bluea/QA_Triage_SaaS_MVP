@@ -100,6 +100,7 @@ export interface AggregatedStep {
 export interface ProjectAggregate {
   projectName: string;
   testCycle?: string;
+  platform?: string;
   runs: TestRunData[];
   testers: Array<{
     id: string;
