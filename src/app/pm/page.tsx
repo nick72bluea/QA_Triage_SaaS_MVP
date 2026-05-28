@@ -9,6 +9,7 @@ import { TestResult, TestRunData, ProjectAggregate, AggregatedStep, TesterResult
 import { groupRunsByProject, aggregateProject, aggregateProjectByPlatform, colorForTester, initialsFor } from '@/lib/triageAggregation';
 import { getProjectPlatforms, projectHasPlatforms } from '@/lib/platforms';
 import { streamDrafts, refineDraft } from '@/lib/draft-client';
+import { formatRelative } from '@/lib/format';
 import { PageHead } from '@/components/PageHead';
 import { QRCodeSVG } from 'qrcode.react';
 
@@ -2083,7 +2084,7 @@ export default function PMTriageDashboard() {
 
                   <div className="msg-bubble from-pm">
                     <div className="msg-bubble-meta">
-                      You · {formatRelativeTime(contactModal.activeThread.root.createdAt)}
+                      You · {formatRelative(contactModal.activeThread.root.createdAt)}
                     </div>
                     <div className="msg-bubble-body">{contactModal.activeThread.root.body}</div>
                   </div>
@@ -2095,7 +2096,7 @@ export default function PMTriageDashboard() {
                     >
                       <div className="msg-bubble-meta">
                         {!reply.readByPm && <span className="unread-dot"></span>}
-                        {contactModal.tester.name.split(' ')[0]} · {formatRelativeTime(reply.createdAt)}
+                        {contactModal.tester.name.split(' ')[0]} · {formatRelative(reply.createdAt)}
                         {!reply.readByPm && ' · new'}
                       </div>
                       <div className="msg-bubble-body">{reply.body}</div>
