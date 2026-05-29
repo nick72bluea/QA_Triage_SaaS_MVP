@@ -20,11 +20,17 @@ const MOCK_SAVED_SCRIPTS: SavedScriptSummary[] = [
   { id: 's4', name: 'Search ranking edge cases', stepCount: 18, estimatedMinutes: 15, tags: ['UAT'] },
 ];
 
-const FEED_EVENTS = [
-  { avatar: 'N', color: '#3d5a80', name: 'Nick', action: 'passed step 02 on', project: 'annabels8', status: 'pass', time: 'just now' },
-  { avatar: 'K', color: '#a6421f', name: 'Kate', action: 'started', project: 'annabels10', status: 'info', time: '1m' },
-  { avatar: 'J', color: '#a6421f', name: 'James', action: 'completed', project: 'annabels8', status: 'pass', time: '2h' },
-];
+const AVATAR_COLORS = ['#3d5a80', '#a6421f', '#6a4a7c', '#b8860b', '#4a7c59'];
+
+function relativeTime(ts: any): string {
+  if (!ts) return '—';
+  const ms = ts?.toMillis ? ts.toMillis() : (typeof ts === 'number' ? ts : 0);
+  const diff = Date.now() - ms;
+  if (diff < 60000) return 'just now';
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}m`;
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h`;
+  return `${Math.floor(diff / 86400000)}d`;
+}
 
 const MOCK_SCRIPT_STEPS: Record<string, WizardScriptStep[]> = {
   's1': [
@@ -354,7 +360,7 @@ HomeStyles.displayName = 'HomeStyles';
 
 export default function PMHomeDashboard() {
   const router = useRouter();
-  const { currentAccountId } = useAuth();
+  const { currentAccountId, profile } = useAuth();
 
   // Only gates browser-specific values — NOT the whole UI
   const [hydrated, setHydrated] = useState(false);
@@ -502,6 +508,45 @@ export default function PMHomeDashboard() {
     else if (pct === 100) status = 'done';
     return { ...proj, testerCount, pct, status, activeTesters };
   }), [projects]);
+
+  const feedEvents = useMemo(() => {
+    const events = allRuns
+      .filter(r => r.testerName !== 'Unassigned')
+      .map(r => {
+        const resultCount = Object.keys(r.results || {}).length;
+        const isCompleted = r.isCompleted;
+        let action: string;
+        let status: 'pass' | 'fail' | 'info';
+        if (isCompleted) {
+          action = 'completed';
+          status = 'pass';
+        } else if (resultCount > 0) {
+          const hasFailures = Object.values(r.results || {}).some(v => v.status === 'Failed');
+          action = hasFailures ? `logged a failure on` : `passed ${resultCount} step${resultCount !== 1 ? 's' : ''} on`;
+          status = hasFailures ? 'fail' : 'pass';
+        } else {
+          action = 'started';
+          status = 'info';
+        }
+        const name = r.testerName;
+        return {
+          avatar: name.charAt(0).toUpperCase(),
+          color: AVATAR_COLORS[name.length % AVATAR_COLORS.length],
+          name,
+          action,
+          project: r.projectName,
+          status,
+          time: relativeTime(r.createdAt),
+        };
+      })
+      .sort((a, b) => {
+        // completed first, then active, then started
+        const order = { pass: 0, fail: 1, info: 2 };
+        return order[a.status] - order[b.status];
+      })
+      .slice(0, 10);
+    return events;
+  }, [allRuns]);
 
   const filteredProjects = useMemo(() => {
     const q = searchQuery.toLowerCase();
@@ -737,7 +782,7 @@ export default function PMHomeDashboard() {
               <span>Workspace · {projects.length} projects</span>
               <span style={{ opacity: 0.5 }}>—</span>
               {/* greeting updates after hydration but 'Good morning' is safe default */}
-              <span className="time-now">{greeting}, John</span>
+              <span className="time-now">{greeting}, {profile?.displayName || profile?.email?.split('@')[0] || 'there'}</span>
             </div>
             <h1 className="hero-title">Your <em>test cycles</em>,<br/>in one place.</h1>
           </div>
@@ -785,20 +830,26 @@ export default function PMHomeDashboard() {
           <div className="module feed-module">
             <div className="module-label"><span className="live-dot"></span> Live activity</div>
             <div className="feed-list">
-              <div className="feed-track">
-                {[...FEED_EVENTS, ...FEED_EVENTS].map((e, i) => (
-                  <div className="feed-item" key={i}>
-                    <div className="mini-avatar" style={{ background: e.color }}>{e.avatar}</div>
-                    <div className="feed-text">
-                      <b>{e.name}</b> {e.action} <span className="project">{e.project}</span>
-                      <div style={{ marginTop: '2px' }}>
-                        <span className={`status ${e.status}`}>{e.status === 'pass' ? 'PASS' : e.status === 'fail' ? 'FAIL' : 'EVENT'}</span>
+              {feedEvents.length === 0 ? (
+                <div style={{ padding: '20px 18px', color: 'var(--ink-mute)', fontSize: '12px', fontStyle: 'italic' }}>
+                  No tester activity yet.
+                </div>
+              ) : (
+                <div className="feed-track">
+                  {[...feedEvents, ...(feedEvents.length < 4 ? feedEvents : [])].map((e, i) => (
+                    <div className="feed-item" key={i}>
+                      <div className="mini-avatar" style={{ background: e.color }}>{e.avatar}</div>
+                      <div className="feed-text">
+                        <b>{e.name}</b> {e.action} <span className="project">{e.project}</span>
+                        <div style={{ marginTop: '2px' }}>
+                          <span className={`status ${e.status}`}>{e.status === 'pass' ? 'PASS' : e.status === 'fail' ? 'FAIL' : 'EVENT'}</span>
+                        </div>
                       </div>
+                      <div className="feed-time">{e.time}</div>
                     </div>
-                    <div className="feed-time">{e.time}</div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 

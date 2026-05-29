@@ -267,6 +267,7 @@ const GlobalTesterStyles = React.memo(() => (
     .inbox-close { width: 26px; height: 26px; background: transparent; border: 1px solid var(--line); border-radius: 6px; color: var(--ink-mute); cursor: pointer; display: flex; align-items: center; justify-content: center; }
     .inbox-close:hover { color: var(--ink); background: rgba(255,255,255,0.03); }
     .inbox-list { flex: 1; overflow-y: auto; }
+    .inbox-foot { padding: 10px 16px; border-top: 1px solid var(--line); font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink-mute); text-align: center; letter-spacing: 0.06em; }
     .inbox-empty { padding: 40px 20px; text-align: center; color: var(--ink-mute); font-size: 13px; }
     .inbox-item { padding: 14px 16px; border-bottom: 1px solid var(--line); cursor: pointer; transition: background 0.15s; display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: flex-start; }
     .inbox-item:hover { background: rgba(255,255,255,0.02); }
