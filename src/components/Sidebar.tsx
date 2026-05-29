@@ -5,6 +5,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useWorkspaceSettings } from "@/hooks/useWorkspaceSettings";
 import { useAuth } from "@/contexts/AuthContext";
+import { doc, collection, setDoc, serverTimestamp } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 // Sidebar — persistent left rail. Reads workspaceName + logoUrl from the
 // current account's settings so it rebrands automatically.
@@ -105,6 +107,18 @@ const SidebarStyles = React.memo(() => (
     .sidebar-ws-item.active .sidebar-ws-name { color: #f4f3ef; font-weight: 500; }
     .sidebar-ws-role { font-family: 'JetBrains Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(244,243,239,0.3); flex-shrink: 0; }
     .sidebar-ws-check { flex-shrink: 0; color: var(--brand-primary, #7ab28a); }
+    .sidebar-ws-new { display: flex; align-items: center; gap: 10px; padding: 9px 14px; cursor: pointer; transition: background 0.12s; border: none; background: transparent; width: 100%; text-align: left; font-family: inherit; color: rgba(244,243,239,0.45); font-size: 13px; }
+    .sidebar-ws-new:hover { background: rgba(255,255,255,0.05); color: rgba(244,243,239,0.75); }
+    .sidebar-ws-new:disabled { opacity: 0.4; cursor: not-allowed; }
+    .sidebar-ws-new-icon { width: 18px; height: 18px; border-radius: 4px; border: 1px dashed rgba(255,255,255,0.2); display: grid; place-items: center; flex-shrink: 0; }
+    .sidebar-new-ws-form { padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; }
+    .sidebar-new-ws-input { height: 32px; padding: 0 10px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; color: #f4f3ef; font-family: inherit; font-size: 13px; outline: none; width: 100%; }
+    .sidebar-new-ws-input:focus { border-color: var(--brand-primary, #7ab28a); }
+    .sidebar-new-ws-input::placeholder { color: rgba(244,243,239,0.3); }
+    .sidebar-new-ws-actions { display: flex; gap: 6px; }
+    .sidebar-new-ws-btn { flex: 1; height: 30px; border-radius: 5px; font-family: inherit; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid rgba(255,255,255,0.12); background: transparent; color: rgba(244,243,239,0.6); }
+    .sidebar-new-ws-btn.primary { background: var(--brand-primary, #7ab28a); border-color: transparent; color: #0f1410; }
+    .sidebar-new-ws-btn:disabled { opacity: 0.5; cursor: not-allowed; }
   `,
     }}
   />
@@ -130,7 +144,44 @@ export function Sidebar() {
   const { user, profile, signOut, accounts, currentAccountId, switchAccount } = useAuth();
 
   const [popoverOpen, setPopoverOpen] = useState(false);
+  const [showNewWsForm, setShowNewWsForm] = useState(false);
+  const [newWsName, setNewWsName] = useState("");
+  const [creatingWs, setCreatingWs] = useState(false);
   const footRef = useRef<HTMLDivElement>(null);
+  const newWsInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (showNewWsForm) setTimeout(() => newWsInputRef.current?.focus(), 50);
+  }, [showNewWsForm]);
+
+  const createWorkspace = async () => {
+    if (!user || !newWsName.trim()) return;
+    setCreatingWs(true);
+    try {
+      const accountRef = doc(collection(db, "accounts"));
+      const accountId = accountRef.id;
+      const name = newWsName.trim();
+      await setDoc(accountRef, { name, ownerId: user.uid, createdAt: serverTimestamp() });
+      await setDoc(doc(db, "accounts", accountId, "settings", "workspace"), {
+        workspaceName: name,
+        createdAt: serverTimestamp(),
+      });
+      await setDoc(doc(db, "accountMembers", `${accountId}_${user.uid}`), {
+        accountId,
+        uid: user.uid,
+        email: user.email,
+        displayName: profile?.displayName || user.email?.split("@")[0] || "Owner",
+        role: "owner",
+        joinedAt: serverTimestamp(),
+      });
+      await setDoc(doc(db, "users", user.uid), { lastAccountId: accountId }, { merge: true });
+      // Reload page so AuthContext re-initialises with new memberships
+      window.location.href = "/home";
+    } catch (err) {
+      console.error("Failed to create workspace", err);
+      setCreatingWs(false);
+    }
+  };
 
   // Close popover on outside click
   useEffect(() => {
@@ -202,33 +253,59 @@ export function Sidebar() {
       <div className="sidebar-foot" ref={footRef} style={{ position: "relative" }}>
         {popoverOpen && (
           <div className="sidebar-popover" style={{ "--brand-primary": primary } as React.CSSProperties}>
-            {accounts.length > 1 && (
-              <>
-                <div className="sidebar-popover-label">Workspaces</div>
-                {accounts.map(a => {
-                  const isActive = a.accountId === currentAccountId;
-                  return (
-                    <button
-                      key={a.accountId}
-                      className={`sidebar-ws-item${isActive ? " active" : ""}`}
-                      onClick={async () => {
-                        if (!isActive) { await switchAccount(a.accountId); setPopoverOpen(false); }
-                      }}
-                    >
-                      <div className="sidebar-ws-dot" />
-                      <span className="sidebar-ws-name">{a.accountName}</span>
-                      <span className="sidebar-ws-role">{a.role}</span>
-                      {isActive && (
-                        <svg className="sidebar-ws-check" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                          <polyline points="20 6 9 17 4 12" />
-                        </svg>
-                      )}
-                    </button>
-                  );
-                })}
-                <div className="sidebar-popover-divider" />
-              </>
+            {/* Workspaces — always visible */}
+            <div className="sidebar-popover-label">Workspaces</div>
+            {accounts.map(a => {
+              const isActive = a.accountId === currentAccountId;
+              return (
+                <button
+                  key={a.accountId}
+                  className={`sidebar-ws-item${isActive ? " active" : ""}`}
+                  onClick={async () => {
+                    if (!isActive) { await switchAccount(a.accountId); setPopoverOpen(false); window.location.href = "/home"; }
+                  }}
+                >
+                  <div className="sidebar-ws-dot" />
+                  <span className="sidebar-ws-name">{a.accountName}</span>
+                  <span className="sidebar-ws-role">{a.role}</span>
+                  {isActive && (
+                    <svg className="sidebar-ws-check" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  )}
+                </button>
+              );
+            })}
+
+            {/* New workspace form or button */}
+            {showNewWsForm ? (
+              <div className="sidebar-new-ws-form">
+                <input
+                  ref={newWsInputRef}
+                  className="sidebar-new-ws-input"
+                  placeholder="Workspace name"
+                  value={newWsName}
+                  onChange={(e) => setNewWsName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") createWorkspace(); if (e.key === "Escape") { setShowNewWsForm(false); setNewWsName(""); } }}
+                  disabled={creatingWs}
+                />
+                <div className="sidebar-new-ws-actions">
+                  <button className="sidebar-new-ws-btn" onClick={() => { setShowNewWsForm(false); setNewWsName(""); }} disabled={creatingWs}>Cancel</button>
+                  <button className="sidebar-new-ws-btn primary" onClick={createWorkspace} disabled={!newWsName.trim() || creatingWs}>
+                    {creatingWs ? "Creating…" : "Create"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button className="sidebar-ws-new" onClick={() => setShowNewWsForm(true)}>
+                <div className="sidebar-ws-new-icon">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                </div>
+                New workspace
+              </button>
             )}
+
+            <div className="sidebar-popover-divider" />
             <Link href="/admin/settings" style={{ textDecoration: "none" }} onClick={() => setPopoverOpen(false)}>
               <div className="sidebar-popover-item">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
