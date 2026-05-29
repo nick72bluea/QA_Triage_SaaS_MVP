@@ -30,7 +30,7 @@ import { verifyPin } from "@/lib/pin";
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
 
-export type Role = "owner" | "admin" | "editor" | "viewer";
+export type Role = "owner" | "admin" | "member" | "viewer";
 
 export interface UserProfile {
   uid: string;

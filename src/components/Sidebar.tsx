@@ -95,6 +95,16 @@ const SidebarStyles = React.memo(() => (
     .sidebar-popover-item:hover { background: rgba(255,255,255,0.05); color: #f4f3ef; }
     .sidebar-popover-item.danger:hover { background: rgba(166,66,31,0.15); color: #e08060; }
     .sidebar-popover-divider { height: 1px; background: rgba(255,255,255,0.07); margin: 4px 0; }
+    .sidebar-popover-label { padding: 8px 14px 4px; font-family: 'JetBrains Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.12em; color: rgba(244,243,239,0.3); }
+    .sidebar-ws-item { display: flex; align-items: center; gap: 10px; padding: 9px 14px; cursor: pointer; transition: background 0.12s; border: none; background: transparent; width: 100%; text-align: left; font-family: inherit; }
+    .sidebar-ws-item:hover { background: rgba(255,255,255,0.05); }
+    .sidebar-ws-item.active { background: rgba(255,255,255,0.04); cursor: default; }
+    .sidebar-ws-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.2); flex-shrink: 0; }
+    .sidebar-ws-item.active .sidebar-ws-dot { background: var(--brand-primary, #7ab28a); }
+    .sidebar-ws-name { font-size: 13px; color: rgba(244,243,239,0.75); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sidebar-ws-item.active .sidebar-ws-name { color: #f4f3ef; font-weight: 500; }
+    .sidebar-ws-role { font-family: 'JetBrains Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(244,243,239,0.3); flex-shrink: 0; }
+    .sidebar-ws-check { flex-shrink: 0; color: var(--brand-primary, #7ab28a); }
   `,
     }}
   />
@@ -117,7 +127,7 @@ function getActiveHref(pathname: string | null): string | null {
 export function Sidebar() {
   const pathname = usePathname();
   const { settings } = useWorkspaceSettings();
-  const { user, profile, signOut } = useAuth();
+  const { user, profile, signOut, accounts, currentAccountId, switchAccount } = useAuth();
 
   const [popoverOpen, setPopoverOpen] = useState(false);
   const footRef = useRef<HTMLDivElement>(null);
@@ -191,7 +201,34 @@ export function Sidebar() {
 
       <div className="sidebar-foot" ref={footRef} style={{ position: "relative" }}>
         {popoverOpen && (
-          <div className="sidebar-popover">
+          <div className="sidebar-popover" style={{ "--brand-primary": primary } as React.CSSProperties}>
+            {accounts.length > 1 && (
+              <>
+                <div className="sidebar-popover-label">Workspaces</div>
+                {accounts.map(a => {
+                  const isActive = a.accountId === currentAccountId;
+                  return (
+                    <button
+                      key={a.accountId}
+                      className={`sidebar-ws-item${isActive ? " active" : ""}`}
+                      onClick={async () => {
+                        if (!isActive) { await switchAccount(a.accountId); setPopoverOpen(false); }
+                      }}
+                    >
+                      <div className="sidebar-ws-dot" />
+                      <span className="sidebar-ws-name">{a.accountName}</span>
+                      <span className="sidebar-ws-role">{a.role}</span>
+                      {isActive && (
+                        <svg className="sidebar-ws-check" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      )}
+                    </button>
+                  );
+                })}
+                <div className="sidebar-popover-divider" />
+              </>
+            )}
             <Link href="/admin/settings" style={{ textDecoration: "none" }} onClick={() => setPopoverOpen(false)}>
               <div className="sidebar-popover-item">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
