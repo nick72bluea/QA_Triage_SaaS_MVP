@@ -60,6 +60,7 @@ export interface AuthContextValue {
   switchAccount: (accountId: string) => Promise<void>;
   verifyUserPin: (pin: string) => Promise<boolean>;
   signOut: () => Promise<void>;
+  fullSignOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
 
@@ -375,7 +376,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [user, setPinVerified]
   );
 
+  // Lock: for PIN users, preserve Firebase session and send to PIN page.
+  // For non-PIN users, do a full sign-out.
   const signOut = useCallback(async () => {
+    if (profile?.hasPinSet) {
+      setPinVerified(false);
+      router.replace("/login/pin");
+    } else {
+      await firebaseSignOut();
+      setPinVerified(false);
+      setProfile(null);
+      setCurrentAccountId(null);
+      router.replace("/login");
+    }
+  }, [router, setPinVerified, profile]);
+
+  // Full sign-out: always ends the Firebase session regardless of PIN.
+  // Used by the PIN page "Use a different account" link.
+  const fullSignOut = useCallback(async () => {
     await firebaseSignOut();
     setPinVerified(false);
     setProfile(null);
@@ -400,6 +418,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     switchAccount,
     verifyUserPin,
     signOut,
+    fullSignOut,
     refreshProfile,
   };
 

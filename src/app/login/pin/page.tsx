@@ -117,7 +117,7 @@ const PIN_LENGTH = 8;
 
 export default function PinPage() {
   const router = useRouter();
-  const { user, profile, verifyUserPin, signOut, loading } = useAuth();
+  const { user, profile, verifyUserPin, fullSignOut, loading } = useAuth();
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
   const [shake, setShake] = useState(false);
@@ -264,7 +264,7 @@ export default function PinPage() {
         </div>
 
         <div className="pin-actions">
-          <button className="pin-action-link" onClick={signOut}>
+          <button className="pin-action-link" onClick={fullSignOut}>
             ← Use a different account
           </button>
           {verifying && (
