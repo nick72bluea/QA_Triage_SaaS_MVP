@@ -2,6 +2,9 @@
 // Branding fields drive the live theme (BrandingProvider) and tester surfaces.
 
 export type ThemeMode = "light" | "dark" | "auto";
+export type CornerStyle = "sharp" | "default" | "soft" | "rounded";
+export type SidebarStyle = "dark" | "brand" | "light";
+export type FontPairing = "classic" | "modern" | "neutral";
 
 export interface WorkspaceSettings {
   // ─── IDENTITY ──────────────────────────────────────────────────────────
@@ -14,6 +17,9 @@ export interface WorkspaceSettings {
   brandColorPrimary: string; // main accent (hex)
   brandColorSecondary: string; // secondary accent (hex)
   theme: ThemeMode;
+  cornerStyle: CornerStyle; // button/card border-radius
+  sidebarStyle: SidebarStyle; // sidebar background treatment
+  fontPairing: FontPairing; // heading + body + mono font set
 
   // Legacy single-colour field kept for backward compat with old data.
   // New code should use brandColorPrimary.
@@ -58,6 +64,9 @@ export const WORKSPACE_DEFAULTS: WorkspaceSettings = {
   brandColorPrimary: "#2d4a3e",
   brandColorSecondary: "#a6421f",
   theme: "light",
+  cornerStyle: "default",
+  sidebarStyle: "dark",
+  fontPairing: "classic",
   brandColor: "#2d4a3e", // legacy compat
 
   jiraUrl: "",

@@ -7,6 +7,9 @@ import { useWorkspaceSettings } from "@/hooks/useWorkspaceSettings";
 import {
   WorkspaceSettings,
   ThemeMode,
+  CornerStyle,
+  SidebarStyle,
+  FontPairing,
   BRAND_COLOR_PRESETS_PRIMARY,
   BRAND_COLOR_PRESETS_SECONDARY,
 } from "@/types/workspace";
@@ -136,6 +139,33 @@ const GlobalSettingsStyles = React.memo(() => (
     @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
     @media (max-width: 1100px) { .main { grid-template-columns: 1fr; } .section-nav { display: none; } .content { padding: 32px 24px 120px; } .field-row { grid-template-columns: 1fr; gap: 12px; } .brand-preview-card { position: static; } }
+
+    /* CORNER STYLE / SIDEBAR STYLE / FONT PAIRING PICKERS */
+    .option-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .option-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .option-card { padding: 14px 12px 12px; background: var(--surface, #fff); border: 1.5px solid var(--line, #e5e2db); border-radius: 8px; cursor: pointer; transition: all 0.15s; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+    .option-card:hover { border-color: #b8b3a8; }
+    .option-card.selected { border-color: var(--accent, #2d4a3e); background: var(--accent-soft, rgba(45,74,62,0.06)); }
+    .option-card-label { font-size: 12px; font-weight: 500; color: var(--ink, #1a1a1a); }
+    .option-card-desc { font-family: 'JetBrains Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-mute, #8a867f); }
+
+    /* Corner style preview */
+    .corner-preview { width: 40px; height: 32px; background: var(--accent-soft, rgba(45,74,62,0.1)); border: 1.5px solid var(--accent, #2d4a3e); display: flex; align-items: center; justify-content: center; }
+
+    /* Sidebar style preview */
+    .sidebar-preview { width: 100%; height: 64px; border-radius: 6px; overflow: hidden; border: 1px solid var(--line, #e5e2db); display: flex; }
+    .sidebar-preview-rail { width: 28px; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 4px; padding: 8px 4px; }
+    .sidebar-preview-dot { width: 14px; height: 4px; border-radius: 2px; }
+    .sidebar-preview-dot.active { width: 14px; }
+    .sidebar-preview-content { flex: 1; background: #f4f3ef; padding: 8px; display: flex; flex-direction: column; gap: 4px; }
+    .sidebar-preview-bar { height: 6px; border-radius: 2px; background: #d4d0c7; }
+    .sidebar-preview-bar.short { width: 60%; }
+
+    /* Font pairing preview */
+    .font-preview { width: 100%; text-align: left; }
+    .font-preview-display { font-size: 18px; font-weight: 600; letter-spacing: -0.02em; color: var(--ink, #1a1a1a); line-height: 1.1; margin-bottom: 4px; }
+    .font-preview-body { font-size: 11px; color: var(--ink-soft, #55524d); line-height: 1.4; }
+    .font-preview-mono { font-size: 10px; color: var(--ink-mute, #8a867f); letter-spacing: 0.04em; }
 
     /* MEMBERS */
     .invite-box { display: flex; align-items: center; gap: 10px; padding: 14px 16px; background: var(--surface-alt, #fafaf7); border: 1px solid var(--line, #e5e2db); border-radius: 8px; }
@@ -634,6 +664,107 @@ export default function WorkspaceSettingsPage() {
                           <div className={`theme-option-swatch ${t.id}`} />
                           <div className="theme-option-label">{t.label}</div>
                           <div className="theme-option-desc">{t.desc}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* CORNER STYLE */}
+                  <div>
+                    <div className="brand-block-label">Corner style</div>
+                    <div className="brand-block-desc">Controls the roundness of buttons, cards, and inputs across the whole app.</div>
+                    <div className="option-grid-4">
+                      {([
+                        { id: "sharp",   label: "Sharp",   desc: "2px",  r: "2px"  },
+                        { id: "default", label: "Default", desc: "6px",  r: "6px"  },
+                        { id: "soft",    label: "Soft",    desc: "10px", r: "10px" },
+                        { id: "rounded", label: "Rounded", desc: "16px", r: "16px" },
+                      ] as { id: CornerStyle; label: string; desc: string; r: string }[]).map((c) => (
+                        <div key={c.id} className={`option-card${(formData.cornerStyle ?? "default") === c.id ? " selected" : ""}`} onClick={() => set("cornerStyle", c.id)}>
+                          <div className="corner-preview" style={{ borderRadius: c.r }}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent,#2d4a3e)" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx={parseInt(c.r)} /></svg>
+                          </div>
+                          <div className="option-card-label">{c.label}</div>
+                          <div className="option-card-desc">{c.desc}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* SIDEBAR STYLE */}
+                  <div>
+                    <div className="brand-block-label">Sidebar style</div>
+                    <div className="brand-block-desc">How the navigation rail looks. Brand uses your primary colour.</div>
+                    <div className="option-grid-3">
+                      {([
+                        { id: "dark",  label: "Dark",  desc: "Forest night", railBg: "#0f1410", dotColor: previewPrimary },
+                        { id: "brand", label: "Brand", desc: "Your colour",   railBg: previewPrimary, dotColor: "#fff" },
+                        { id: "light", label: "Light", desc: "Clean & open",  railBg: "#ffffff", dotColor: previewPrimary },
+                      ] as { id: SidebarStyle; label: string; desc: string; railBg: string; dotColor: string }[]).map((s) => (
+                        <div key={s.id} className={`option-card${(formData.sidebarStyle ?? "dark") === s.id ? " selected" : ""}`} onClick={() => set("sidebarStyle", s.id)} style={{ padding: "10px 8px" }}>
+                          <div className="sidebar-preview" style={{ border: `1px solid ${s.railBg === "#ffffff" ? "#d4d0c7" : "transparent"}` }}>
+                            <div className="sidebar-preview-rail" style={{ background: s.railBg }}>
+                              <div className="sidebar-preview-dot active" style={{ background: s.dotColor, opacity: 1 }} />
+                              <div className="sidebar-preview-dot" style={{ background: s.dotColor, opacity: 0.35 }} />
+                              <div className="sidebar-preview-dot" style={{ background: s.dotColor, opacity: 0.35 }} />
+                            </div>
+                            <div className="sidebar-preview-content">
+                              <div className="sidebar-preview-bar" />
+                              <div className="sidebar-preview-bar short" />
+                              <div className="sidebar-preview-bar short" style={{ width: "40%" }} />
+                            </div>
+                          </div>
+                          <div className="option-card-label">{s.label}</div>
+                          <div className="option-card-desc">{s.desc}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* FONT PAIRING */}
+                  <div>
+                    <div className="brand-block-label">Font pairing</div>
+                    <div className="brand-block-desc">Heading, body, and monospace fonts used throughout the app.</div>
+                    <div className="option-grid-3">
+                      {([
+                        {
+                          id: "classic",
+                          label: "Classic",
+                          display: "'Fraunces', serif",
+                          body: "'IBM Plex Sans', sans-serif",
+                          mono: "'JetBrains Mono', monospace",
+                          sampleDisplay: "Fraunces",
+                          sampleBody: "IBM Plex Sans — clear and technical",
+                          sampleMono: "JetBrains Mono",
+                        },
+                        {
+                          id: "modern",
+                          label: "Modern",
+                          display: "'Plus Jakarta Sans', sans-serif",
+                          body: "'Inter', sans-serif",
+                          mono: "'Fira Code', monospace",
+                          sampleDisplay: "Jakarta Sans",
+                          sampleBody: "Inter — clean and contemporary",
+                          sampleMono: "Fira Code",
+                        },
+                        {
+                          id: "neutral",
+                          label: "Neutral",
+                          display: "'DM Serif Display', serif",
+                          body: "'DM Sans', sans-serif",
+                          mono: "'DM Mono', monospace",
+                          sampleDisplay: "DM Serif",
+                          sampleBody: "DM Sans — warm and cohesive",
+                          sampleMono: "DM Mono",
+                        },
+                      ] as { id: FontPairing; label: string; display: string; body: string; mono: string; sampleDisplay: string; sampleBody: string; sampleMono: string }[]).map((f) => (
+                        <div key={f.id} className={`option-card${(formData.fontPairing ?? "classic") === f.id ? " selected" : ""}`} onClick={() => set("fontPairing", f.id)} style={{ alignItems: "flex-start", padding: "14px" }}>
+                          <div className="font-preview">
+                            <div className="font-preview-display" style={{ fontFamily: f.display }}>{f.sampleDisplay}</div>
+                            <div className="font-preview-body" style={{ fontFamily: f.body }}>{f.sampleBody}</div>
+                            <div className="font-preview-mono" style={{ fontFamily: f.mono }}>{f.sampleMono}</div>
+                          </div>
+                          <div className="option-card-label">{f.label}</div>
                         </div>
                       ))}
                     </div>

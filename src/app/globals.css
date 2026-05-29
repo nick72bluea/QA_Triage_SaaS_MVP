@@ -50,8 +50,30 @@
   --amber-deep:   #947011;
   --amber-soft:   #f9f0da;
 
-  /* Misc */
-  --radius: 6px;
+  /* Border radius scale — driven by cornerStyle in BrandingProvider */
+  --radius:      6px;
+  --radius-sm:   4px;
+  --radius-lg:   10px;
+  --radius-xl:   16px;
+  --radius-card: 10px;
+
+  /* Font stack — driven by fontPairing in BrandingProvider */
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-body:    'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', 'Fira Code', monospace;
+
+  /* Sidebar tokens — driven by sidebarStyle in BrandingProvider */
+  --sidebar-bg:           #0f1410;
+  --sidebar-ink:          rgba(244,243,239,0.55);
+  --sidebar-ink-bright:   #f4f3ef;
+  --sidebar-ink-mute:     rgba(244,243,239,0.3);
+  --sidebar-border:       rgba(255,255,255,0.06);
+  --sidebar-hover-bg:     rgba(255,255,255,0.04);
+  --sidebar-active-bg:    rgba(255,255,255,0.07);
+  --sidebar-active-ink:   #f4f3ef;
+  --sidebar-active-bar:   var(--brand-primary, #2d4a3e);
+  --sidebar-popover-bg:   #1a2420;
+  --sidebar-popover-ink:  rgba(244,243,239,0.75);
 }
 
 html {
