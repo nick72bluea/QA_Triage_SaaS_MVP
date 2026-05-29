@@ -532,11 +532,11 @@ export default function PMTriageDashboard() {
       onTicketReady: (id, draft) => setDraftingModal(prev => ({ ...prev, tickets: prev.tickets.map(t => t.id === id ? { ...t, ...draft, status: 'ready' } : t) })),
       onTicketError: (id, error) => {
         console.warn(`Draft failed for ${id}:`, error); // Suppress Next.js red screen overlay
-        alert("AI Drafting Paused: Anthropic API returned an error (likely out of credits).");
+        alert("AI Drafting Paused: Anthropic API returned an error (likely out of credits or invalid API key — check Settings → AI Configuration).");
         setDraftingModal(prev => ({ ...prev, tickets: prev.tickets.map(t => t.id === id ? { ...t, status: 'queued' } : t) }));
       },
       onDone: () => {},
-    });
+    }, currentAccountId || undefined);
   };
 
   const handleRefine = async (instruction: string) => {
@@ -551,7 +551,7 @@ export default function PMTriageDashboard() {
     }));
 
     try {
-      const refined = await refineDraft(activeTicket, instruction);
+      const refined = await refineDraft(activeTicket, instruction, currentAccountId || undefined);
       setDraftingModal(prev => ({
         ...prev,
         refining: false,
@@ -573,42 +573,69 @@ export default function PMTriageDashboard() {
   const handleFinalPush = async () => {
     const approvedTickets = draftingModal.tickets.filter(t => t.approved);
     if (approvedTickets.length === 0) return;
-  
+
     setDraftingModal(prev => ({ ...prev, pushing: true }));
-  
+
     try {
       const res = await fetch('/api/push-to-jira', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tickets: approvedTickets }),
+        body: JSON.stringify({ tickets: approvedTickets, accountId: currentAccountId }),
       });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(err.error || `Server error ${res.status}`);
+      }
+
       const data = await res.json();
-  
-      const successKeys = data.results.filter((r: any) => r.success).map((r: any) => r.jiraKey);
+      const successResults = (data.results || []).filter((r: any) => r.success);
+      const successKeys = successResults.map((r: any) => r.jiraKey);
+
+      // Store jiraKey + jiraUrl back onto each ticket so the UI can show links
+      setDraftingModal(prev => ({
+        ...prev,
+        tickets: prev.tickets.map(t => {
+          const result = successResults.find((r: any) => r.id === t.id);
+          return result ? { ...t, pushed: true, jiraKey: result.jiraKey, jiraUrl: result.jiraUrl } : t;
+        }),
+      }));
+
       setSuccessToast({ show: true, keys: successKeys });
       setTimeout(() => setSuccessToast({ show: false, keys: [] }), 6000);
-  
+
       const toSave = { ...pendingTriage };
       setSavedTriage(prev => ({ ...prev, ...toSave }));
       setPendingTriage({});
       setSelectedBugs([]);
       setDraftingModal({ open: false, tickets: [], activeTicketId: null, refining: false, pushing: false });
 
+      // Persist triage state to Firestore and record the Jira key against each step
       await Promise.all(
         Object.entries(toSave).map(([key, pending]) => {
           const firstUnderscore = key.indexOf('_');
           const runId = key.slice(0, firstUnderscore);
           const stepId = key.slice(firstUnderscore + 1);
+          // Find the Jira key for this step (tickets are keyed by stepId)
+          const ticketResult = successResults.find((r: any) => {
+            const t = approvedTickets.find(at => at.id === r.id);
+            return t?.stepId === stepId;
+          });
           return updateDoc(doc(db, 'testRuns', runId), {
             [`results.${stepId}.isTriaged`]: true,
             [`results.${stepId}.triageAction`]: pending.action,
             [`results.${stepId}.triagePriority`]: pending.priority || null,
             [`results.${stepId}.triagedAt`]: Date.now(),
+            ...(ticketResult ? {
+              [`results.${stepId}.jiraKey`]: ticketResult.jiraKey,
+              [`results.${stepId}.jiraUrl`]: ticketResult.jiraUrl,
+            } : {}),
           });
         })
       );
-    } catch (err) {
-      alert('Push failed. Some tickets may have been created. Check Jira and Firestore.');
+    } catch (err: any) {
+      console.error('Push to Jira failed:', err);
+      alert(`Push failed: ${err.message || 'Unknown error'}. Check your Jira settings in Admin → Settings.`);
       setDraftingModal(prev => ({ ...prev, pushing: false }));
     }
   };

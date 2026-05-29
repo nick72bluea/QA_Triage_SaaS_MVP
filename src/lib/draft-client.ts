@@ -9,12 +9,13 @@ interface StreamCallbacks {
 
 export async function streamDrafts(
   tickets: any[],
-  callbacks: StreamCallbacks
+  callbacks: StreamCallbacks,
+  accountId?: string
 ): Promise<void> {
   const res = await fetch('/api/draft-tickets', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ tickets }),
+    body: JSON.stringify({ tickets, accountId }),
   });
 
   if (!res.body) throw new Error('No response stream');
@@ -53,11 +54,11 @@ export async function streamDrafts(
   }
 }
 
-export async function refineDraft(draft: AIDraftedTicket, refinement: string): Promise<AIDraftedTicket> {
+export async function refineDraft(draft: AIDraftedTicket, refinement: string, accountId?: string): Promise<AIDraftedTicket> {
   const res = await fetch('/api/refine-ticket', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ draft, refinement }),
+    body: JSON.stringify({ draft, refinement, accountId }),
   });
   
   if (!res.ok) {

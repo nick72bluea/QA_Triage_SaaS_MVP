@@ -29,6 +29,7 @@ export interface WorkspaceSettings {
   jiraUrl: string;
   jiraEmail: string;
   jiraToken: string;
+  jiraProjectKey: string;  // e.g. "QA" or "UAT" — the Jira project tickets are created in
   slackConnected: boolean;
   slackChannel: string;
   figmaConnected: boolean;
@@ -72,6 +73,7 @@ export const WORKSPACE_DEFAULTS: WorkspaceSettings = {
   jiraUrl: "",
   jiraEmail: "",
   jiraToken: "",
+  jiraProjectKey: "",
   slackConnected: false,
   slackChannel: "#qa-alerts",
   figmaConnected: false,

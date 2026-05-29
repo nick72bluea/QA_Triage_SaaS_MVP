@@ -1,13 +1,30 @@
 import { NextResponse } from 'next/server';
-
-export const runtime = 'edge';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 export async function POST(req: Request) {
-  const { draft, refinement } = await req.json();
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const { draft, refinement, accountId } = await req.json();
+
+  // Resolve API key: prefer per-workspace key, fall back to server env var
+  let apiKey = process.env.ANTHROPIC_API_KEY || '';
+
+  if (accountId) {
+    try {
+      const settingsSnap = await getDoc(doc(db, 'accounts', accountId, 'settings', 'workspace'));
+      if (settingsSnap.exists()) {
+        const workspaceKey = settingsSnap.data()?.aiToken;
+        if (workspaceKey) apiKey = workspaceKey;
+      }
+    } catch (err) {
+      console.warn('Could not load workspace aiToken — using server env key', err);
+    }
+  }
 
   if (!apiKey) {
-    return NextResponse.json({ error: 'Missing API Key' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'No Anthropic API key configured. Add your key in Settings → AI Configuration.' },
+      { status: 500 }
+    );
   }
 
   try {
@@ -57,7 +74,7 @@ Rules:
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-3-5-sonnet-20240620',
+        model: 'claude-3-5-sonnet-20241022',
         max_tokens: 2000,
         temperature: 0.3,
         system: systemPrompt,

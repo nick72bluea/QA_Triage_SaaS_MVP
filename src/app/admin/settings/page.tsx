@@ -393,7 +393,8 @@ export default function WorkspaceSettingsPage() {
     if (
       formData.jiraUrl !== settings.jiraUrl ||
       formData.jiraEmail !== settings.jiraEmail ||
-      formData.jiraToken !== settings.jiraToken
+      formData.jiraToken !== settings.jiraToken ||
+      formData.jiraProjectKey !== settings.jiraProjectKey
     )
       out.push("Integrations");
     return out;
@@ -838,6 +839,15 @@ export default function WorkspaceSettingsPage() {
                 </div>
                 <div className="field-input">
                   <input className="input" type="password" value={formData.jiraToken} onChange={(e) => set("jiraToken", e.target.value)} placeholder="••••••••••••" />
+                </div>
+              </div>
+              <div className="field-row">
+                <div>
+                  <div className="field-label-name">Project key</div>
+                  <div className="field-label-desc">The short key for the Jira project where bugs are created — e.g. <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>QA</code> or <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>UAT</code>.</div>
+                </div>
+                <div className="field-input">
+                  <input className="input" type="text" value={formData.jiraProjectKey || ""} onChange={(e) => set("jiraProjectKey", e.target.value.toUpperCase())} placeholder="QA" style={{ textTransform: "uppercase", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.05em" }} />
                 </div>
               </div>
             </div>

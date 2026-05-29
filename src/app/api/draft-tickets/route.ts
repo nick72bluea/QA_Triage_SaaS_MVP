@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
-export const runtime = 'edge';
+// NOTE: This route runs in the Node.js runtime (not edge) so it can call Firestore
+// to resolve the per-workspace Anthropic API key before streaming.
 
 interface InboundTicket {
   id: string;
@@ -23,11 +26,29 @@ interface InboundTicket {
 }
 
 export async function POST(req: Request) {
-  const { tickets } = await req.json() as { tickets: InboundTicket[] };
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const body = await req.json() as { tickets: InboundTicket[]; accountId?: string };
+  const { tickets, accountId } = body;
+
+  // Resolve API key: prefer per-workspace key, fall back to server env var
+  let apiKey = process.env.ANTHROPIC_API_KEY || '';
+
+  if (accountId) {
+    try {
+      const settingsSnap = await getDoc(doc(db, 'accounts', accountId, 'settings', 'workspace'));
+      if (settingsSnap.exists()) {
+        const workspaceKey = settingsSnap.data()?.aiToken;
+        if (workspaceKey) apiKey = workspaceKey;
+      }
+    } catch (err) {
+      console.warn('Could not load workspace aiToken — using server env key', err);
+    }
+  }
 
   if (!apiKey) {
-    return NextResponse.json({ error: 'Missing Anthropic API Key' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'No Anthropic API key configured. Add your key in Settings → AI Configuration.' },
+      { status: 500 }
+    );
   }
 
   const encoder = new TextEncoder();
@@ -41,14 +62,13 @@ export async function POST(req: Request) {
     );
   };
 
-  // Run draft generation in the background, return the stream immediately
+  // Run draft generation in the background, return the stream immediately.
+  // Sequential processing gives the PM a satisfying "progress" feel as each
+  // ticket arrives one at a time.
   const generate = async () => {
     try {
-      // Process tickets sequentially. Could parallelize but sequential
-      // gives the PM a nice "progress" feel as each ticket completes.
       for (const ticket of tickets) {
         await send('ticket-started', { id: ticket.id });
-
         try {
           const draft = await draftOneTicket(ticket, apiKey);
           await send('ticket-ready', { id: ticket.id, draft });
@@ -60,7 +80,6 @@ export async function POST(req: Request) {
           });
         }
       }
-
       await send('done', {});
     } catch (err: any) {
       console.error('Draft stream fatal error:', err);
@@ -82,8 +101,7 @@ export async function POST(req: Request) {
 }
 
 async function draftOneTicket(ticket: InboundTicket, apiKey: string) {
-  // Build a clean source summary the LLM can read.
-  // We label each tester [t1], [t2]... so the AI can cite them in its output.
+  // Label each tester [t1], [t2]... so the AI can cite them in its output
   const sourcesForPrompt = ticket.sources.map((s, i) => ({
     label: `t${i + 1}`,
     testerId: s.testerId,
@@ -152,7 +170,7 @@ Rules:
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model: 'claude-3-5-sonnet-20240620',
+      model: 'claude-3-5-sonnet-20241022',
       max_tokens: 2000,
       temperature: 0.3,
       system: systemPrompt,
@@ -169,7 +187,6 @@ Rules:
   const rawText = data.content?.[0]?.text;
   if (!rawText) throw new Error('No content in Anthropic response');
 
-  // Extract the JSON object from the response (handles stray whitespace/preamble)
   const jsonMatch = rawText.match(/\{[\s\S]*\}/);
   if (!jsonMatch) throw new Error('No JSON object found in response');
 
