@@ -254,6 +254,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const userProfile = await getOrCreateUserProfile(firebaseUser);
         setProfile(userProfile);
 
+        // Store a lightweight hint for the login page so returning users
+        // with a PIN see a "welcome back" prompt. Kept on sign-out intentionally.
+        if (typeof window !== "undefined") {
+          try {
+            localStorage.setItem("proofdeck_last_user", JSON.stringify({
+              displayName: userProfile.displayName,
+              email: userProfile.email,
+              hasPinSet: userProfile.hasPinSet,
+            }));
+          } catch {}
+        }
+
         const { accountId, role } = await getOrCreateAccount(
           firebaseUser,
           userProfile

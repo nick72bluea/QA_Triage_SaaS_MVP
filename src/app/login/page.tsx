@@ -1,12 +1,28 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   sendMagicLink,
   signInWithGoogle,
   signInWithMicrosoft,
 } from "@/lib/auth";
+
+interface LastUserHint {
+  displayName: string;
+  email: string;
+  hasPinSet: boolean;
+}
+
+function readLastUserHint(): LastUserHint | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem("proofdeck_last_user");
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
 
 const LoginStyles = React.memo(() => (
   <style
@@ -138,6 +154,35 @@ const LoginStyles = React.memo(() => (
     }
     .auth-foot a { color: var(--accent); text-decoration: none; }
     .auth-foot a:hover { text-decoration: underline; }
+    .auth-returning {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 16px; margin-bottom: 24px;
+      background: var(--accent-soft); border: 1px solid rgba(45,74,62,0.2);
+      border-radius: 10px; cursor: default;
+    }
+    .auth-returning-avatar {
+      width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
+      background: var(--accent); color: #fff;
+      display: grid; place-items: center;
+      font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 600;
+    }
+    .auth-returning-text { flex: 1; min-width: 0; }
+    .auth-returning-name { font-size: 13px; font-weight: 600; color: var(--ink); }
+    .auth-returning-hint { font-size: 12px; color: var(--ink-soft); margin-top: 2px; display: flex; align-items: center; gap: 5px; }
+    .auth-returning-pin-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      padding: 2px 6px; border-radius: 4px;
+      background: var(--accent); color: #fff;
+    }
+    .auth-returning-clear {
+      background: none; border: none; padding: 4px 6px; cursor: pointer;
+      font-family: 'JetBrains Mono', monospace; font-size: 10px;
+      color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.08em;
+      flex-shrink: 0; transition: color 0.15s;
+    }
+    .auth-returning-clear:hover { color: var(--ink); }
     @keyframes fade-in {
       from { opacity: 0; transform: translateY(8px); }
       to { opacity: 1; transform: translateY(0); }
@@ -161,9 +206,22 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
-  const [oauthLoading, setOauthLoading] = useState<"google" | "microsoft" | null>(
-    null
-  );
+  const [oauthLoading, setOauthLoading] = useState<"google" | "microsoft" | null>(null);
+  const [lastUser, setLastUser] = useState<LastUserHint | null>(null);
+
+  useEffect(() => {
+    const hint = readLastUserHint();
+    if (hint?.hasPinSet) {
+      setLastUser(hint);
+      setEmail(hint.email);
+    }
+  }, []);
+
+  const clearHint = () => {
+    setLastUser(null);
+    setEmail("");
+    try { localStorage.removeItem("proofdeck_last_user"); } catch {}
+  };
 
   const handleMagicLink = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -242,6 +300,27 @@ export default function LoginPage() {
             with a connected account.
           </p>
         </div>
+
+        {lastUser && !sent && (
+          <div className="auth-returning">
+            <div className="auth-returning-avatar">
+              {lastUser.displayName.charAt(0).toUpperCase()}
+            </div>
+            <div className="auth-returning-text">
+              <div className="auth-returning-name">{lastUser.displayName}</div>
+              <div className="auth-returning-hint">
+                <span className="auth-returning-pin-badge">
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                  PIN
+                </span>
+                Sign in and you'll be prompted for your PIN
+              </div>
+            </div>
+            <button className="auth-returning-clear" onClick={clearHint} type="button">
+              Not you?
+            </button>
+          </div>
+        )}
 
         {sent ? (
           <div className="auth-success">
