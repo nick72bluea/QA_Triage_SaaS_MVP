@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { collection, onSnapshot, addDoc, serverTimestamp, query, where } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import Papa from 'papaparse';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -13,12 +13,7 @@ import { Step3Script } from './_components/Step3Script';
 
 // ─── Sidebar is NOT imported here — it lives in layout.tsx ───
 
-const MOCK_SAVED_SCRIPTS: SavedScriptSummary[] = [
-  { id: 's1', name: 'Onboarding v3', stepCount: 23, estimatedMinutes: 22, tags: ['UAT', 'Onboarding'] },
-  { id: 's2', name: 'Checkout regression suite', stepCount: 42, estimatedMinutes: 40, tags: ['Regression'] },
-  { id: 's3', name: 'Mobile signup smoke test', stepCount: 8, estimatedMinutes: 6, tags: ['Smoke'] },
-  { id: 's4', name: 'Search ranking edge cases', stepCount: 18, estimatedMinutes: 15, tags: ['UAT'] },
-];
+// Removed MOCK_SAVED_SCRIPTS — now loaded from Firestore in the component
 
 const AVATAR_COLORS = ['#3d5a80', '#a6421f', '#6a4a7c', '#b8860b', '#4a7c59'];
 
@@ -32,16 +27,7 @@ function relativeTime(ts: any): string {
   return `${Math.floor(diff / 86400000)}d`;
 }
 
-const MOCK_SCRIPT_STEPS: Record<string, WizardScriptStep[]> = {
-  's1': [
-    { id: 'mock-step-1', action: 'Open the app for the first time after install', expectedResult: 'Welcome screen appears with sign-in options visible within 2s', priority: 'High', area: 'Onboarding' },
-    { id: 'mock-step-2', action: 'Tap "Continue with Google"', expectedResult: 'Google account picker appears within 2s', priority: 'High', area: 'Auth' },
-    { id: 'mock-step-3', action: 'Complete the email verification step', expectedResult: 'User is redirected to the welcome dashboard', priority: 'Medium', area: 'Auth' },
-  ],
-  'default': [
-    { id: 'mock-step-4', action: 'Generic test step 1', expectedResult: 'Works as expected', priority: 'Medium', area: 'Core' }
-  ]
-};
+// Removed MOCK_SCRIPT_STEPS — steps are now fetched from Firestore when a script is selected
 
 const stepTitles: Record<number, { t: string; s: string }> = {
   1: { t: 'Project Parameters', s: 'Give your project a name and context. You can edit these later.' },
@@ -382,6 +368,7 @@ export default function PMHomeDashboard() {
   const [wizPlatforms, setWizPlatforms] = useState<string[]>([]);
   const [wizPlatformInput, setWizPlatformInput] = useState('');
 
+  const [savedScripts, setSavedScripts] = useState<SavedScriptSummary[]>([]);
   const [scriptPath, setScriptPath] = useState<ScriptPath | null>(null);
   const [savedScriptId, setSavedScriptId] = useState<string | null>(null);
   const [csvFile, setCsvFile] = useState<File | null>(null);
@@ -423,6 +410,21 @@ export default function PMHomeDashboard() {
       });
     });
     return () => unsubscribe();
+  }, [currentAccountId]);
+
+  // Load saved scripts from Firestore
+  useEffect(() => {
+    if (!currentAccountId) return;
+    const q = query(collection(db, `accounts/${currentAccountId}/scripts`), where('status', '==', 'active'));
+    getDocs(q).then(snap => {
+      setSavedScripts(snap.docs.map(d => ({
+        id: d.id,
+        name: d.data().name || 'Untitled Script',
+        stepCount: d.data().stepCount || d.data().steps?.length || 0,
+        estimatedMinutes: Math.ceil((d.data().stepCount || d.data().steps?.length || 0) * 1.2),
+        tags: d.data().tags || [],
+      })));
+    }).catch(console.error);
   }, [currentAccountId]);
 
   // Sync new tester platforms state with defined platforms
@@ -565,10 +567,16 @@ export default function PMHomeDashboard() {
 
   const triggerSaved = () => { setWizSaved(true); setTimeout(() => setWizSaved(false), 1500); };
 
-  const handleSavedScriptSelect = (id: string) => {
+  const handleSavedScriptSelect = async (id: string) => {
     setSavedScriptId(id);
-    const steps = MOCK_SCRIPT_STEPS[id] || MOCK_SCRIPT_STEPS['default'];
-    setSavedScriptSteps(JSON.parse(JSON.stringify(steps)));
+    setSavedScriptSteps([]);
+    if (!currentAccountId) return;
+    try {
+      const snap = await getDoc(doc(db, `accounts/${currentAccountId}/scripts`, id));
+      if (snap.exists()) {
+        setSavedScriptSteps(snap.data().steps || []);
+      }
+    } catch (e) { console.error('Failed to load script steps', e); }
     triggerSaved();
   };
 
@@ -1149,7 +1157,7 @@ export default function PMHomeDashboard() {
                     <Step2Script
                       scriptPath={scriptPath}
                       onPathChange={setScriptPath}
-                      savedScripts={MOCK_SAVED_SCRIPTS}
+                      savedScripts={savedScripts}
                       selectedSavedScriptId={savedScriptId}
                       onSelectSavedScript={handleSavedScriptSelect}
                       csvFile={csvFile}
@@ -1171,7 +1179,7 @@ export default function PMHomeDashboard() {
                       csvRawData={wizRawData}
                       csvMapping={wizMap}
                       onCsvMappingChange={(fieldId, colId) => { setWizMap({ ...wizMap, [fieldId]: colId }); triggerSaved(); }}
-                      selectedSavedScript={MOCK_SAVED_SCRIPTS.find(s => s.id === savedScriptId) || null}
+                      selectedSavedScript={savedScripts.find(s => s.id === savedScriptId) || null}
                       savedScriptSteps={savedScriptSteps}
                       onSavedScriptStepsChange={s => { setSavedScriptSteps(s); triggerSaved(); }}
                       manualSteps={manualSteps}

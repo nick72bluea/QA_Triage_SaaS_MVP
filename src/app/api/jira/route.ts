@@ -5,14 +5,17 @@ import { db } from '@/lib/firebase';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { bugs } = body;
+    const { bugs, accountId } = body;
 
     if (!bugs || !Array.isArray(bugs)) {
       return NextResponse.json({ error: 'Invalid data format.' }, { status: 400 });
     }
+    if (!accountId) {
+      return NextResponse.json({ error: 'Missing accountId.' }, { status: 400 });
+    }
 
-    // 1. Fetch the API keys from the database securely on the server
-    const settingsRef = doc(db, 'settings', 'global');
+    // 1. Fetch the API keys from the account-specific settings doc
+    const settingsRef = doc(db, 'accounts', accountId, 'settings', 'workspace');
     const settingsSnap = await getDoc(settingsRef);
 
     if (!settingsSnap.exists()) {

@@ -121,8 +121,3 @@ export const BRAND_COLOR_PRESETS_SECONDARY = [
   "#c2185b", // raspberry
   "#5a32d9", // deep purple
 ];
-
-// Legacy export — old code referenced WORKSPACE_ID for the single-tenant
-// path 'workspaces/default_workspace'. Kept as an empty string to avoid
-// import errors during migration. New code uses currentAccountId from useAuth.
-export const WORKSPACE_ID = "default_workspace";

@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { doc, getDoc, collection, addDoc, updateDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { useAuth } from '@/contexts/AuthContext';
 
 // --- Local Types ---
 interface ScriptStep {
@@ -52,6 +53,7 @@ function parseBulkText(text: string): ScriptStep[] {
 export default function ScriptBuilderPage() {
   const params = useParams();
   const router = useRouter();
+  const { currentAccountId } = useAuth();
   const routeId = params.scriptId as string;
   
   const [isMounted, setIsMounted] = useState(false);
@@ -96,9 +98,10 @@ export default function ScriptBuilderPage() {
       setIsInitialLoad(false);
       return;
     }
+    if (!currentAccountId) return;
     const fetchScript = async () => {
       try {
-        const docRef = doc(db, 'workspaces/default_workspace/scripts', routeId);
+        const docRef = doc(db, `accounts/${currentAccountId}/scripts`, routeId);
         const snap = await getDoc(docRef);
         if (snap.exists()) {
           const data = snap.data();
@@ -106,42 +109,44 @@ export default function ScriptBuilderPage() {
           setDescription(data.description || '');
           setSteps(data.steps || []);
         }
-      } catch (e) { console.error(e); } 
+      } catch (e) { console.error(e); }
       finally { setIsInitialLoad(false); }
     };
     fetchScript();
-  }, [routeId]);
+  }, [routeId, currentAccountId]);
 
-  // 2. Listen to Figma Connection Status
+  // 2. Listen to Figma Connection Status (account-scoped)
   useEffect(() => {
-    const unsub = onSnapshot(doc(db, 'workspaces/default_workspace/integrations/figma'), (docSnap) => {
+    if (!currentAccountId) return;
+    const unsub = onSnapshot(doc(db, `accounts/${currentAccountId}/integrations/figma`), (docSnap) => {
       setFigmaConnected(docSnap.exists() && docSnap.data().status === 'active');
     });
     return () => unsub();
-  }, []);
+  }, [currentAccountId]);
 
   // 3. Debounced Auto-Save
   useEffect(() => {
     if (isInitialLoad) return;
+    if (!currentAccountId) return;
     if (currentId === 'new' && !name && !description && steps.length === 0) return;
 
     setSaveStatus('Unsaved');
     const timer = setTimeout(async () => {
       setSaveStatus('Saving...');
-      const payload = { name: name || 'Untitled Script', description, steps, stepCount: steps.length, status: 'active', updatedAt: serverTimestamp() };
+      const payload = { name: name || 'Untitled Script', description, steps, stepCount: steps.length, status: 'active', accountId: currentAccountId, updatedAt: serverTimestamp() };
       try {
         if (currentId === 'new') {
-          const docRef = await addDoc(collection(db, 'workspaces/default_workspace/scripts'), { ...payload, createdAt: serverTimestamp(), tags: [], regressionRuns: [] });
+          const docRef = await addDoc(collection(db, `accounts/${currentAccountId}/scripts`), { ...payload, createdAt: serverTimestamp(), tags: [], regressionRuns: [] });
           setCurrentId(docRef.id);
           window.history.replaceState(null, '', `/scripts/${docRef.id}`);
         } else {
-          await updateDoc(doc(db, 'workspaces/default_workspace/scripts', currentId), payload);
+          await updateDoc(doc(db, `accounts/${currentAccountId}/scripts`, currentId), payload);
         }
         setSaveStatus('Saved');
       } catch (e) { setSaveStatus('Unsaved'); }
     }, 1200);
     return () => clearTimeout(timer);
-  }, [name, description, steps, currentId, isInitialLoad]);
+  }, [name, description, steps, currentId, isInitialLoad, currentAccountId]);
 
   // --- Handlers ---
   const updateStep = (id: string, patch: Partial<ScriptStep>) => setSteps(prev => prev.map(s => s.id === id ? { ...s, ...patch } : s));
