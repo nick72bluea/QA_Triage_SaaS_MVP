@@ -104,6 +104,9 @@ export function BrandingProvider({ children, snapshot }: BrandingProviderProps) 
     // Override existing --accent so legacy components automatically rebrand
     root.style.setProperty("--accent", brand.primary);
     root.style.setProperty("--accent-soft", hexToRgba(brand.primary, 0.12));
+    root.style.setProperty("--accent-ink", darken(brand.primary, 0.15));
+    root.style.setProperty("--brand-primary", brand.primary);
+    root.style.setProperty("--brand-secondary", brand.secondary);
 
     // Logo as a CSS var (consumed by ::before pseudo-elements where needed)
     if (brand.logoUrl) {
@@ -137,6 +140,16 @@ export function BrandingProvider({ children, snapshot }: BrandingProviderProps) 
 }
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
+
+function darken(hex: string, amount: number): string {
+  const clean = hex.replace("#", "");
+  const expanded = clean.length === 3 ? clean.split("").map(c => c + c).join("") : clean;
+  if (expanded.length !== 6) return hex;
+  const r = Math.max(0, Math.round(parseInt(expanded.slice(0, 2), 16) * (1 - amount)));
+  const g = Math.max(0, Math.round(parseInt(expanded.slice(2, 4), 16) * (1 - amount)));
+  const b = Math.max(0, Math.round(parseInt(expanded.slice(4, 6), 16) * (1 - amount)));
+  return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+}
 
 function hexToRgba(hex: string, alpha: number): string {
   const clean = hex.replace("#", "");

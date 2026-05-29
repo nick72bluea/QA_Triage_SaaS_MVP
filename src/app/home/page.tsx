@@ -5,6 +5,8 @@ import { collection, onSnapshot, addDoc, serverTimestamp, query, where, getDocs,
 import Papa from 'papaparse';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
+import { useWorkspaceSettings } from '@/hooks/useWorkspaceSettings';
+import { brandingSnapshotFrom } from '@/types/workspace';
 import { TestRunData, TestStep, ScriptPath, WizardScriptStep, SavedScriptSummary } from '@/types';
 import { useRouter } from 'next/navigation';
 
@@ -66,16 +68,6 @@ const HomeStyles = React.memo(() => (
     @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500;1,9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
     
     .qa-home-wrapper {
-      --bg: #f4f3ef; --surface: #ffffff; --surface-alt: #fafaf7;
-      --ink: #1a1a1a; --ink-soft: #55524d; --ink-mute: #8a867f;
-      --line: #e5e2db; --line-strong: #d4d0c7;
-      --accent: #2d4a3e; --accent-soft: #e8f0eb; --accent-ink: #1d3329;
-      --rail: #121a17; --rail-ink: #e5e2db; --rail-mute: #7a7a72;
-      --pass: #4a7c59; --pass-soft: #e8f0eb;
-      --fail: #a6421f; --fail-soft: #f7e8e2;
-      --warn: #b8860b; --warn-soft: #f9f0da;
-      --info: #3d5a80; --info-soft: #e5ecf2;
-      --purple: #6a4a7c; --purple-soft: rgba(106,74,124,0.12);
       --radius: 6px;
       --m1: #3d5a80; --m2: #a6421f; --m3: #b8860b; --m4: #6a4a7c; --m5: #4a7c59;
       background: var(--bg);
@@ -347,6 +339,7 @@ HomeStyles.displayName = 'HomeStyles';
 export default function PMHomeDashboard() {
   const router = useRouter();
   const { currentAccountId, profile } = useAuth();
+  const { settings: workspaceSettings } = useWorkspaceSettings();
 
   // Only gates browser-specific values — NOT the whole UI
   const [hydrated, setHydrated] = useState(false);
@@ -657,6 +650,7 @@ export default function PMHomeDashboard() {
   const launchProject = async () => {
     if (!currentAccountId) { alert('Not authenticated — please reload.'); return; }
     setIsLaunching(true);
+    const branding = workspaceSettings ? brandingSnapshotFrom(workspaceSettings) : null;
     try {
       let finalSteps: TestStep[] = [];
       if (scriptPath === 'saved') {
@@ -684,6 +678,7 @@ export default function PMHomeDashboard() {
             environment: wizEnv,
             testCycle: wizCycle,
             steps: finalSteps,
+            branding,
             createdAt: serverTimestamp(),
             results: {},
             accountId: currentAccountId,
@@ -705,6 +700,7 @@ export default function PMHomeDashboard() {
               platform,
               platforms: wizPlatforms,
               accountId: currentAccountId,
+              branding,
             });
           }
         } else {
@@ -721,6 +717,7 @@ export default function PMHomeDashboard() {
                 platform,
                 platforms: wizPlatforms,
                 accountId: currentAccountId,
+                branding,
               });
             }
           }

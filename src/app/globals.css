@@ -1,13 +1,57 @@
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* ─── DESIGN SYSTEM TOKENS ────────────────────────────────────────────────────
+   These are the fallback defaults. BrandingProvider overrides --accent,
+   --accent-soft, --accent-ink, --brand-primary, --brand-secondary, and all
+   theme tokens (--bg, --surface, --ink etc.) via inline styles on <html>,
+   which have higher specificity than these :root rules.
+   Do NOT redeclare these variables inside page container classes — that will
+   shadow the BrandingProvider values for all descendants.
+   ─────────────────────────────────────────────────────────────────────────── */
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+:root {
+  /* Brand / accent — overridden at runtime by BrandingProvider */
+  --accent:           #2d4a3e;
+  --accent-soft:      rgba(45, 74, 62, 0.12);
+  --accent-ink:       #1d3329;
+  --brand-primary:    #2d4a3e;
+  --brand-secondary:  #a6421f;
+
+  /* Light-mode surface tokens — BrandingProvider switches these for dark */
+  --bg:           #f4f3ef;
+  --surface:      #ffffff;
+  --surface-alt:  #fafaf7;
+  --ink:          #1a1a1a;
+  --ink-soft:     #55524d;
+  --ink-mute:     #8a867f;
+  --line:         #e5e2db;
+  --line-strong:  #d4d0c7;
+
+  /* Sidebar rail (always dark — not theme-sensitive) */
+  --rail:         #0f1410;
+  --rail-ink:     #e5e2db;
+  --rail-mute:    #7a7a72;
+
+  /* Semantic status colours — static, not theme-dependent */
+  --pass:         #4a7c59;
+  --pass-soft:    #e8f0eb;
+  --fail:         #a6421f;
+  --fail-soft:    #f7e8e2;
+  --warn:         #b8860b;
+  --warn-soft:    #f9f0da;
+  --info:         #3d5a80;
+  --info-soft:    #e5ecf2;
+  --purple:       #6a4a7c;
+  --purple-soft:  rgba(106, 74, 124, 0.12);
+  --ai:           #7c4dff;
+  --ai-soft:      #ede5ff;
+  --jira:         #0052cc;
+  --jira-light:   #2684ff;
+  --amber:        #b8860b;
+  --amber-bright: #e8c888;
+  --amber-deep:   #947011;
+  --amber-soft:   #f9f0da;
+
+  /* Misc */
+  --radius: 6px;
 }
 
 html {
@@ -24,9 +68,8 @@ body {
   min-height: 100%;
   display: flex;
   flex-direction: column;
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -40,10 +83,4 @@ body {
 a {
   color: inherit;
   text-decoration: none;
-}
-
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
-  }
 }

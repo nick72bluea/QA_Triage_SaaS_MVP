@@ -149,7 +149,7 @@ const GlobalTesterStyles = React.memo(() => (
       --bg: #0f1410; --surface: #171d18; --surface-lift: #1d2420; --surface-high: #242b26;
       --ink: #f4f3ef; --ink-soft: #c4c0b4; --ink-mute: #7a7a72;
       --line: rgba(255,255,255,0.08); --line-strong: rgba(255,255,255,0.15);
-      --accent: #7ab28a; --accent-ink: #4a7c59; --accent-soft: rgba(122,178,138,0.12);
+      /* --accent / --accent-soft / --accent-ink come from TesterBrandingProvider at runtime */
       --coral: #e8a385; --coral-soft: rgba(232,163,133,0.12);
       --warm: #f0d4a1; --warm-soft: rgba(240,212,161,0.12);
       --rose: #d88a90; --rose-soft: rgba(216,138,144,0.14);

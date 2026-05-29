@@ -12,17 +12,7 @@ const ScriptsStyles = React.memo(() => (
   <style dangerouslySetInnerHTML={{__html: `
     @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
     
-    :root, .scripts-page {
-      --bg: #f4f3ef; --surface: #ffffff; --surface-alt: #fafaf7;
-      --ink: #1a1a1a; --ink-soft: #55524d; --ink-mute: #8a867f;
-      --line: #e5e2db; --line-strong: #d4d0c7;
-      --accent: #2d4a3e; --accent-soft: #e8f0eb; --accent-ink: #1d3329;
-      --pass: #4a7c59; --pass-soft: #e8f0eb;
-      --fail: #a6421f; --fail-soft: #f7e8e2;
-      --warn: #b8860b; --warn-soft: #f9f0da;
-      --info: #3d5a80; --info-soft: #e5ecf2;
-      --radius: 6px;
-    }
+    /* CSS tokens live in globals.css + BrandingProvider — no redeclaration needed */
 
     .scripts-page * { box-sizing: border-box; }
     .scripts-page { min-height: 100vh; background: var(--bg); font-family: 'IBM Plex Sans', system-ui, sans-serif; color: var(--ink); font-size: 14px; }
