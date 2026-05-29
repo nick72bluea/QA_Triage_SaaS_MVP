@@ -378,7 +378,10 @@ export default function WorkspaceSettingsPage() {
     if (
       formData.brandColorPrimary !== settings.brandColorPrimary ||
       formData.brandColorSecondary !== settings.brandColorSecondary ||
-      formData.theme !== settings.theme
+      formData.theme !== settings.theme ||
+      formData.cornerStyle !== settings.cornerStyle ||
+      formData.sidebarStyle !== settings.sidebarStyle ||
+      formData.fontPairing !== settings.fontPairing
     )
       out.push("Branding");
     if (
