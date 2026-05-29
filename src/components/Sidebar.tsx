@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useWorkspaceSettings } from "@/hooks/useWorkspaceSettings";
@@ -81,11 +81,20 @@ const SidebarStyles = React.memo(() => (
     .sidebar-nav-item svg { flex-shrink: 0; opacity: 0.7; }
     .sidebar-nav-item.active svg { opacity: 1; color: var(--brand-primary, #7ab28a); }
     .sidebar-foot { margin-top: auto; padding: 12px 8px; border-top: 1px solid rgba(255,255,255,0.06); font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(244,243,239,0.35); }
-    .sidebar-user { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 8px; margin-top: 12px; cursor: pointer; transition: background 0.15s; }
+    .sidebar-user { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 8px; margin-top: 12px; cursor: pointer; transition: background 0.15s; width: 100%; border: none; background: transparent; text-align: left; }
     .sidebar-user:hover { background: rgba(255,255,255,0.04); }
+    .sidebar-user.open { background: rgba(255,255,255,0.06); }
     .sidebar-user-avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--brand-primary, #7ab28a); color: #0f1410; display: grid; place-items: center; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; flex-shrink: 0; overflow: hidden; }
     .sidebar-user-avatar img { width: 100%; height: 100%; object-fit: cover; }
     .sidebar-user-name { font-size: 12px; color: #f4f3ef; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+    .sidebar-user-chevron { color: rgba(244,243,239,0.35); flex-shrink: 0; transition: transform 0.2s; }
+    .sidebar-user.open .sidebar-user-chevron { transform: rotate(180deg); }
+    .sidebar-popover { position: absolute; bottom: calc(100% + 6px); left: 12px; right: 12px; background: #1a2420; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; box-shadow: 0 -8px 24px rgba(0,0,0,0.4); animation: popoverIn 0.15s cubic-bezier(.2,.6,.2,1); z-index: 100; }
+    @keyframes popoverIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    .sidebar-popover-item { display: flex; align-items: center; gap: 10px; padding: 11px 14px; font-size: 13px; color: rgba(244,243,239,0.75); cursor: pointer; transition: background 0.12s; border: none; background: transparent; width: 100%; text-align: left; font-family: inherit; }
+    .sidebar-popover-item:hover { background: rgba(255,255,255,0.05); color: #f4f3ef; }
+    .sidebar-popover-item.danger:hover { background: rgba(166,66,31,0.15); color: #e08060; }
+    .sidebar-popover-divider { height: 1px; background: rgba(255,255,255,0.07); margin: 4px 0; }
   `,
     }}
   />
@@ -108,7 +117,22 @@ function getActiveHref(pathname: string | null): string | null {
 export function Sidebar() {
   const pathname = usePathname();
   const { settings } = useWorkspaceSettings();
-  const { user, profile } = useAuth();
+  const { user, profile, signOut } = useAuth();
+
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  const footRef = useRef<HTMLDivElement>(null);
+
+  // Close popover on outside click
+  useEffect(() => {
+    if (!popoverOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (footRef.current && !footRef.current.contains(e.target as Node)) {
+        setPopoverOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [popoverOpen]);
 
   const workspaceName = settings?.workspaceName || "Workspace";
   const logoUrl = settings?.logoUrl;
@@ -165,21 +189,52 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="sidebar-foot">
-        <Link href="/admin/settings" style={{ display: "block" }}>
-          <div className="sidebar-user">
-            <div className="sidebar-user-avatar">
-              {profile?.photoURL ? (
-                <img src={profile.photoURL} alt="" />
-              ) : (
-                initials
-              )}
-            </div>
-            <div className="sidebar-user-name">
-              {profile?.displayName || user?.email || "Account"}
-            </div>
+      <div className="sidebar-foot" ref={footRef} style={{ position: "relative" }}>
+        {popoverOpen && (
+          <div className="sidebar-popover">
+            <Link href="/admin/settings" style={{ textDecoration: "none" }} onClick={() => setPopoverOpen(false)}>
+              <div className="sidebar-popover-item">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.74 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.74a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" />
+                </svg>
+                Workspace settings
+              </div>
+            </Link>
+            <div className="sidebar-popover-divider" />
+            <button
+              className="sidebar-popover-item danger"
+              onClick={async () => { setPopoverOpen(false); await signOut(); }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+              Log out
+            </button>
           </div>
-        </Link>
+        )}
+
+        <button
+          className={`sidebar-user${popoverOpen ? " open" : ""}`}
+          onClick={() => setPopoverOpen(v => !v)}
+          aria-label="Account menu"
+        >
+          <div className="sidebar-user-avatar">
+            {profile?.photoURL ? (
+              <img src={profile.photoURL} alt="" />
+            ) : (
+              initials
+            )}
+          </div>
+          <div className="sidebar-user-name">
+            {profile?.displayName || user?.email || "Account"}
+          </div>
+          <svg className="sidebar-user-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <polyline points="18 15 12 9 6 15" />
+          </svg>
+        </button>
       </div>
     </aside>
   );
