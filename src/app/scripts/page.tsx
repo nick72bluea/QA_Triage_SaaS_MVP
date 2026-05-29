@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { SavedScript } from '@/types/scripts';
 
@@ -99,6 +100,7 @@ ScriptsStyles.displayName = 'ScriptsStyles';
 
 export default function ScriptsLibraryPage() {
   const router = useRouter();
+  const { currentAccountId } = useAuth();
 
   // hydrated gates only locale-sensitive date formatting — NOT the whole UI
   const [hydrated, setHydrated] = useState(false);
@@ -106,19 +108,18 @@ export default function ScriptsLibraryPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [listFilter, setListFilter] = useState<'active' | 'draft' | 'archived'>('active');
 
-  const workspaceId = 'default_workspace';
-
   useEffect(() => {
     setHydrated(true);
+    if (!currentAccountId) return;
 
-    const scriptsRef = collection(db, `workspaces/${workspaceId}/scripts`);
+    const scriptsRef = collection(db, `accounts/${currentAccountId}/scripts`);
     const q = query(scriptsRef, orderBy('updatedAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const loadedScripts = snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as SavedScript[];
       setScripts(loadedScripts);
     });
     return () => unsubscribe();
-  }, []);
+  }, [currentAccountId]);
 
   const filteredScripts = useMemo(() => {
     return scripts.filter(s => {

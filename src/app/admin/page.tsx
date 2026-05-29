@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, addDoc, serverTimestamp, doc, onSnapshot, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, onSnapshot, deleteDoc, query, where } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '@/lib/firebase';
+import { useAuth } from '@/contexts/AuthContext';
 import { TestRunData, TestStep, TestResult } from '@/types';
 import { useRouter } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
@@ -374,6 +375,7 @@ AdminStyles.displayName = 'AdminStyles';
 
 export default function AdminPage() {
   const router = useRouter();
+  const { currentAccountId } = useAuth();
   const { settings: workspaceSettings } = useWorkspaceSettings();
 
   const [hydrated, setHydrated] = useState(false);
@@ -410,9 +412,11 @@ export default function AdminPage() {
 
   useEffect(() => {
     setHydrated(true);
-    const unsubscribe = onSnapshot(collection(db, 'testRuns'), (snapshot) => {
+    if (!currentAccountId) return;
+    const q = query(collection(db, 'testRuns'), where('accountId', '==', currentAccountId));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
       const runsData = snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as TestRunData[];
-      
+
       setAllRuns(prev => {
         if (prev.length !== runsData.length) return runsData;
         for (let i = 0; i < prev.length; i++) {
@@ -423,7 +427,7 @@ export default function AdminPage() {
       });
     });
     return () => unsubscribe();
-  }, []);
+  }, [currentAccountId]);
 
   const formatDate = (date: Date) => {
     if (!hydrated) return '—';
@@ -461,6 +465,7 @@ export default function AdminPage() {
   };
 
   const handleAddNewTester = async (projectName: string, nameOverride?: string, platformsOverride?: string[]) => {
+    if (!currentAccountId) { alert('Not authenticated — please reload.'); return; }
     const nameToUse = (nameOverride || newTesterName).trim();
     if (!nameToUse) return;
     setIsAddingTester(true);
@@ -485,6 +490,7 @@ export default function AdminPage() {
           steps: templateRun.steps,
           createdAt: serverTimestamp(),
           results: {},
+          accountId: currentAccountId,
           ...(branding ? { branding } : {}),
         });
       } else {
@@ -500,6 +506,7 @@ export default function AdminPage() {
             results: {},
             platform,
             platforms: templateRun.platforms,
+            accountId: currentAccountId,
             ...(branding ? { branding } : {}),
           })
         ));

@@ -2,9 +2,10 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { collection, onSnapshot, doc, updateDoc, addDoc, query, orderBy, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, updateDoc, addDoc, query, orderBy, where, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '@/lib/firebase';
+import { useAuth } from '@/contexts/AuthContext';
 import { TestResult, TestRunData, ProjectAggregate, AggregatedStep, TesterResultOnStep, TesterMessage, MessageThread, AIDraftedTicket, REFINEMENT_CHIPS, PendingTriageAction, PriorityPopoverState, JiraDraftingModalState, ContactModalState } from '@/types';
 import { groupRunsByProject, aggregateProject, aggregateProjectByPlatform, colorForTester, initialsFor } from '@/lib/triageAggregation';
 import { getProjectPlatforms, projectHasPlatforms } from '@/lib/platforms';
@@ -125,7 +126,8 @@ const getMediaType = (url: string) => {
 
 export default function PMTriageDashboard() {
   const router = useRouter();
-  
+  const { currentAccountId } = useAuth();
+
   const [hydrated, setHydrated] = useState(false);
   const [currentYear, setCurrentYear] = useState('');
 
@@ -186,7 +188,9 @@ export default function PMTriageDashboard() {
   }, [activeProjectKey]);
 
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'testRuns'), (snapshot) => {
+    if (!currentAccountId) return;
+    const q = query(collection(db, 'testRuns'), where('accountId', '==', currentAccountId));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
       const runsData = snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as TestRunData[];
       runsData.sort((a, b) => {
         const timeA = a.createdAt?.toMillis() || 0;
@@ -203,13 +207,18 @@ export default function PMTriageDashboard() {
       });
     });
     return () => unsubscribe();
-  }, []);
+  }, [currentAccountId]);
 
   useEffect(() => {
-    const q = query(collection(db, 'testerMessages'), orderBy('createdAt', 'desc'));
+    if (!currentAccountId) return;
+    const q = query(
+      collection(db, 'testerMessages'),
+      where('accountId', '==', currentAccountId),
+      orderBy('createdAt', 'desc')
+    );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const next = snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as TesterMessage[];
-      
+
       setAllMessages(prev => {
         if (prev.length !== next.length) return next;
         for (let i = 0; i < prev.length; i++) {
@@ -224,7 +233,7 @@ export default function PMTriageDashboard() {
       console.error('Messages subscription error:', error);
     });
     return () => unsubscribe();
-  }, []);
+  }, [currentAccountId]);
 
   useEffect(() => {
     if (contactModal) {
@@ -830,12 +839,12 @@ export default function PMTriageDashboard() {
         window.location.href = mailtoUrl;
       } else {
         await addDoc(collection(db, 'testerMessages'), {
-          runId: contactModal.runId, 
+          runId: contactModal.runId,
           projectName: activeProject?.projectName || '',
           testCycle: activeProject?.testCycle || null,
           testerId: contactModal.tester.id,
           testerName: contactModal.tester.name,
-          pmName: 'PM', 
+          pmName: 'PM',
           direction: 'pm_to_tester',
           body: contactMessage.trim(),
           createdAt: Date.now(),
@@ -849,6 +858,7 @@ export default function PMTriageDashboard() {
           readByTester: false,
           readByPm: true,
           hasReply: false,
+          accountId: currentAccountId,
         });
       }
       setContactModal(null);
@@ -886,6 +896,7 @@ export default function PMTriageDashboard() {
         readByTester: false,
         readByPm: true,
         hasReply: false,
+        accountId: currentAccountId,
       });
   
       setContactMessage('');
