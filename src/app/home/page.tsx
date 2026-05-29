@@ -762,7 +762,7 @@ export default function PMHomeDashboard() {
     if (!scriptPath) return 'Pick a path';
     if (scriptPath === 'csv') return csvFile ? `CSV · ${csvFile.name}` : 'Upload CSV';
     if (scriptPath === 'saved') {
-      const s = MOCK_SAVED_SCRIPTS.find(x => x.id === savedScriptId);
+      const s = savedScripts.find(x => x.id === savedScriptId);
       return s ? `${s.name} · ${s.stepCount} steps` : 'Pick saved script';
     }
     return manualSteps.length > 0 ? `Manual · ${manualSteps.length} steps` : 'Build manually';
