@@ -11,6 +11,28 @@ import {
   BRAND_COLOR_PRESETS_SECONDARY,
 } from "@/types/workspace";
 import { uploadLogo } from "@/lib/uploadLogo";
+import {
+  collection, query, where, getDocs, setDoc, deleteDoc,
+  doc as fsDoc, writeBatch, getDoc,
+} from "firebase/firestore";
+import { db } from "@/lib/firebase";
+
+interface MemberDoc {
+  uid: string;
+  email: string;
+  displayName: string;
+  role: string;
+  joinedAt: any;
+}
+
+interface InviteDoc {
+  token: string;
+  accountId: string;
+  accountName: string;
+  createdBy: string;
+  expiresAt: number;
+  role: string;
+}
 
 const GlobalSettingsStyles = React.memo(() => (
   <style
@@ -114,6 +136,42 @@ const GlobalSettingsStyles = React.memo(() => (
     @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
     @media (max-width: 1100px) { .main { grid-template-columns: 1fr; } .section-nav { display: none; } .content { padding: 32px 24px 120px; } .field-row { grid-template-columns: 1fr; gap: 12px; } .brand-preview-card { position: static; } }
+
+    /* MEMBERS */
+    .invite-box { display: flex; align-items: center; gap: 10px; padding: 14px 16px; background: var(--surface-alt, #fafaf7); border: 1px solid var(--line, #e5e2db); border-radius: 8px; }
+    .invite-url { flex: 1; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--ink-soft, #55524d); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+    .invite-expiry { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--ink-mute, #8a867f); white-space: nowrap; flex-shrink: 0; }
+    .btn-sm { height: 32px; padding: 0 12px; font-family: inherit; font-size: 12px; font-weight: 500; border-radius: 6px; cursor: pointer; border: 1px solid var(--line-strong, #d4d0c7); background: var(--surface, #ffffff); color: var(--ink-soft, #55524d); transition: all 0.15s; white-space: nowrap; flex-shrink: 0; }
+    .btn-sm:hover { background: var(--surface-alt, #fafaf7); color: var(--ink, #1a1a1a); }
+    .btn-sm.primary { background: var(--accent, #2d4a3e); color: #fff; border-color: transparent; }
+    .btn-sm.primary:hover { background: #1d3329; }
+    .btn-sm.danger { color: #a6421f; border-color: rgba(166,66,31,0.3); }
+    .btn-sm.danger:hover { background: #f7e8e2; }
+    .btn-sm:disabled { opacity: 0.5; cursor: not-allowed; }
+    .member-list { display: flex; flex-direction: column; }
+    .member-row { display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--line, #e5e2db); }
+    .member-row:last-child { border-bottom: none; }
+    .member-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--accent, #2d4a3e); color: #fff; display: grid; place-items: center; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600; flex-shrink: 0; }
+    .member-info { flex: 1; min-width: 0; }
+    .member-name { font-size: 13px; font-weight: 500; color: var(--ink, #1a1a1a); }
+    .member-email { font-size: 12px; color: var(--ink-mute, #8a867f); font-family: 'JetBrains Mono', monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .role-badge { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; padding: 3px 8px; border-radius: 4px; background: var(--surface-alt, #fafaf7); border: 1px solid var(--line, #e5e2db); color: var(--ink-soft, #55524d); flex-shrink: 0; }
+    .role-badge.owner { background: #fef3c7; border-color: #fcd34d; color: #92400e; }
+    .role-badge.admin { background: var(--accent-soft, #e8f0eb); border-color: rgba(45,74,62,0.2); color: var(--accent, #2d4a3e); }
+    .member-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+    /* DANGER ZONE */
+    .danger-card { border: 1px solid rgba(166,66,31,0.25); border-radius: 10px; overflow: hidden; }
+    .danger-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 20px 24px; border-bottom: 1px solid rgba(166,66,31,0.1); }
+    .danger-row:last-child { border-bottom: none; }
+    .danger-label { font-size: 13px; font-weight: 500; color: var(--ink, #1a1a1a); margin-bottom: 4px; }
+    .danger-desc { font-size: 12px; color: var(--ink-mute, #8a867f); line-height: 1.5; }
+    .btn-danger { height: 36px; padding: 0 16px; font-family: inherit; font-size: 13px; font-weight: 500; border-radius: 6px; cursor: pointer; border: 1px solid rgba(166,66,31,0.4); background: transparent; color: #a6421f; transition: all 0.15s; white-space: nowrap; flex-shrink: 0; }
+    .btn-danger:hover { background: #f7e8e2; border-color: #a6421f; }
+    .btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
+    .confirm-input-wrap { margin-top: 12px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .confirm-input { height: 36px; padding: 0 12px; font-family: 'JetBrains Mono', monospace; font-size: 12px; border: 1px solid rgba(166,66,31,0.4); border-radius: 6px; background: #fff; color: var(--ink, #1a1a1a); width: 240px; }
+    .confirm-input:focus { outline: none; border-color: #a6421f; box-shadow: 0 0 0 3px rgba(166,66,31,0.1); }
   `,
     }}
   />
@@ -122,7 +180,7 @@ GlobalSettingsStyles.displayName = "GlobalSettingsStyles";
 
 export default function WorkspaceSettingsPage() {
   const { settings, loading, save, accountId } = useWorkspaceSettings();
-  const { user } = useAuth();
+  const { user, currentAccountId, currentRole, profile, fullSignOut } = useAuth();
 
   const [formData, setFormData] = useState<WorkspaceSettings | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -132,7 +190,48 @@ export default function WorkspaceSettingsPage() {
   const [hydrated, setHydrated] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Members state
+  const [members, setMembers] = useState<MemberDoc[]>([]);
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [invite, setInvite] = useState<InviteDoc | null>(null);
+  const [inviteGenerating, setInviteGenerating] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [removingUid, setRemovingUid] = useState<string | null>(null);
+
+  // Danger zone state
+  const [deleteConfirmName, setDeleteConfirmName] = useState("");
+  const [deletingWorkspace, setDeletingWorkspace] = useState(false);
+
   useEffect(() => setHydrated(true), []);
+
+  // Load members + active invite
+  useEffect(() => {
+    if (!currentAccountId) return;
+    setMembersLoading(true);
+    const load = async () => {
+      try {
+        const q = query(collection(db, "accountMembers"), where("accountId", "==", currentAccountId));
+        const snap = await getDocs(q);
+        setMembers(snap.docs.map((d) => d.data() as MemberDoc));
+
+        const invQ = query(
+          collection(db, "invites"),
+          where("accountId", "==", currentAccountId)
+        );
+        const invSnap = await getDocs(invQ);
+        const now = Date.now();
+        const valid = invSnap.docs
+          .map((d) => d.data() as InviteDoc)
+          .filter((inv) => inv.expiresAt > now);
+        setInvite(valid.length > 0 ? valid[0] : null);
+      } catch (err) {
+        console.error("Failed to load members", err);
+      } finally {
+        setMembersLoading(false);
+      }
+    };
+    load();
+  }, [currentAccountId]);
 
   useEffect(() => {
     if (!settings) return;
@@ -142,6 +241,95 @@ export default function WorkspaceSettingsPage() {
       return isDirty ? prev : settings;
     });
   }, [settings]);
+
+  // ─── INVITE HELPERS ──────────────────────────────────────────────────────
+
+  const generateInvite = async () => {
+    if (!currentAccountId || !user) return;
+    setInviteGenerating(true);
+    try {
+      // Revoke any existing invites first
+      const invQ = query(collection(db, "invites"), where("accountId", "==", currentAccountId));
+      const existing = await getDocs(invQ);
+      for (const d of existing.docs) await deleteDoc(d.ref);
+
+      const token = crypto.randomUUID();
+      const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
+      const inviteData: InviteDoc = {
+        token,
+        accountId: currentAccountId,
+        accountName: settings?.workspaceName || "Workspace",
+        createdBy: user.uid,
+        expiresAt,
+        role: "member",
+      };
+      await setDoc(fsDoc(db, "invites", token), inviteData);
+      setInvite(inviteData);
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to generate invite", "error");
+    } finally {
+      setInviteGenerating(false);
+    }
+  };
+
+  const revokeInvite = async () => {
+    if (!invite) return;
+    try {
+      await deleteDoc(fsDoc(db, "invites", invite.token));
+      setInvite(null);
+    } catch {
+      showToast("Failed to revoke invite", "error");
+    }
+  };
+
+  const copyInviteLink = async () => {
+    if (!invite) return;
+    const url = `${window.location.origin}/join/${invite.token}`;
+    await navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const removeMember = async (uid: string) => {
+    if (!currentAccountId) return;
+    setRemovingUid(uid);
+    try {
+      await deleteDoc(fsDoc(db, "accountMembers", `${currentAccountId}_${uid}`));
+      setMembers((prev) => prev.filter((m) => m.uid !== uid));
+      showToast("Member removed");
+    } catch {
+      showToast("Failed to remove member", "error");
+    } finally {
+      setRemovingUid(null);
+    }
+  };
+
+  const deleteWorkspace = async () => {
+    if (!currentAccountId || !user) return;
+    setDeletingWorkspace(true);
+    try {
+      const batch = writeBatch(db);
+      // Remove all members
+      const membersQ = query(collection(db, "accountMembers"), where("accountId", "==", currentAccountId));
+      const membersSnap = await getDocs(membersQ);
+      membersSnap.docs.forEach((d) => batch.delete(d.ref));
+      // Remove invites
+      const invitesQ = query(collection(db, "invites"), where("accountId", "==", currentAccountId));
+      const invitesSnap = await getDocs(invitesQ);
+      invitesSnap.docs.forEach((d) => batch.delete(d.ref));
+      // Delete account doc
+      batch.delete(fsDoc(db, "accounts", currentAccountId));
+      // Clear lastAccountId on user
+      batch.update(fsDoc(db, "users", user.uid), { lastAccountId: null });
+      await batch.commit();
+      await fullSignOut();
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to delete workspace", "error");
+      setDeletingWorkspace(false);
+    }
+  };
 
   const showToast = (msg: string, type: "ok" | "error" = "ok") => {
     setToast({ msg, type });
@@ -250,7 +438,7 @@ export default function WorkspaceSettingsPage() {
 
   useEffect(() => {
     if (!hydrated) return;
-    const sections = ["identity", "branding", "integrations", "ai", "notifications"];
+    const sections = ["identity", "branding", "integrations", "ai", "notifications", "members", "danger"];
     const handleScroll = () => {
       const scrollPos = window.scrollY + 140;
       let current = sections[0];
@@ -307,6 +495,8 @@ export default function WorkspaceSettingsPage() {
               { id: "integrations", label: "Integrations" },
               { id: "ai", label: "AI Configuration" },
               { id: "notifications", label: "Notifications" },
+              { id: "members", label: "Members" },
+              { id: "danger", label: "Danger zone" },
             ].map(({ id, label }) => (
               <a key={id} className={`section-nav-item${activeSection === id ? " active" : ""}`} onClick={(e) => scrollToSection(e, id)}>
                 {label}
@@ -552,6 +742,62 @@ export default function WorkspaceSettingsPage() {
             </div>
           </section>
 
+          {/* MEMBERS */}
+          <section className="section" id="members">
+            <div className="section-head">
+              <h2 className="section-title">Members</h2>
+              <p className="section-description">Invite people to your workspace. Everyone joins as a member — owners can promote them later.</p>
+            </div>
+            <div className="section-card">
+              {/* Invite link box */}
+              <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--line, #e5e2db)" }}>
+                <div className="field-label-name" style={{ marginBottom: 8 }}>Invite link</div>
+                <div className="field-label-desc" style={{ marginBottom: 12 }}>Share this link. Anyone with it joins as a member. Links expire after 7 days.</div>
+                {invite ? (
+                  <div className="invite-box">
+                    <span className="invite-url">{typeof window !== "undefined" ? `${window.location.origin}/join/${invite.token}` : `/join/${invite.token}`}</span>
+                    <span className="invite-expiry">Expires {new Date(invite.expiresAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>
+                    <button className="btn-sm" onClick={copyInviteLink}>{copied ? "Copied!" : "Copy"}</button>
+                    <button className="btn-sm danger" onClick={revokeInvite}>Revoke</button>
+                  </div>
+                ) : (
+                  <button className="btn-sm primary" onClick={generateInvite} disabled={inviteGenerating}>
+                    {inviteGenerating ? "Generating…" : "Generate invite link"}
+                  </button>
+                )}
+              </div>
+
+              {/* Member list */}
+              <div className="member-list">
+                {membersLoading ? (
+                  <div style={{ padding: "20px 24px", color: "var(--ink-mute, #8a867f)", fontSize: 13 }}>Loading members…</div>
+                ) : members.length === 0 ? (
+                  <div style={{ padding: "20px 24px", color: "var(--ink-mute, #8a867f)", fontSize: 13 }}>No members yet.</div>
+                ) : members.map((m) => (
+                  <div key={m.uid} className="member-row">
+                    <div className="member-avatar">{(m.displayName || m.email || "?")[0].toUpperCase()}</div>
+                    <div className="member-info">
+                      <div className="member-name">{m.displayName || "—"}</div>
+                      <div className="member-email">{m.email}</div>
+                    </div>
+                    <span className={`role-badge${m.role === "owner" ? " owner" : m.role === "admin" ? " admin" : ""}`}>{m.role}</span>
+                    <div className="member-actions">
+                      {m.uid !== user?.uid && (currentRole === "owner" || currentRole === "admin") && m.role !== "owner" && (
+                        <button
+                          className="btn-sm danger"
+                          onClick={() => removeMember(m.uid)}
+                          disabled={removingUid === m.uid}
+                        >
+                          {removingUid === m.uid ? "Removing…" : "Remove"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
           {/* NOTIFICATIONS */}
           <section className="section" id="notifications">
             <div className="section-head">
@@ -573,6 +819,68 @@ export default function WorkspaceSettingsPage() {
               ))}
             </div>
           </section>
+          {/* DANGER ZONE */}
+          <section className="section" id="danger">
+            <div className="section-head">
+              <h2 className="section-title" style={{ color: "#a6421f" }}>Danger zone</h2>
+              <p className="section-description">Irreversible actions. Proceed with care.</p>
+            </div>
+            <div className="danger-card">
+              {/* Leave workspace (non-owners) */}
+              {currentRole !== "owner" && (
+                <div className="danger-row">
+                  <div>
+                    <div className="danger-label">Leave workspace</div>
+                    <div className="danger-desc">You'll lose access immediately. An owner can re-invite you.</div>
+                  </div>
+                  <button
+                    className="btn-danger"
+                    onClick={async () => {
+                      if (!currentAccountId || !user) return;
+                      try {
+                        await deleteDoc(fsDoc(db, "accountMembers", `${currentAccountId}_${user.uid}`));
+                        await fullSignOut();
+                      } catch {
+                        showToast("Failed to leave workspace", "error");
+                      }
+                    }}
+                  >
+                    Leave workspace
+                  </button>
+                </div>
+              )}
+
+              {/* Delete workspace (owners only) */}
+              {currentRole === "owner" && (
+                <div className="danger-row" style={{ flexDirection: "column", alignItems: "flex-start" }}>
+                  <div style={{ width: "100%" }}>
+                    <div className="danger-label">Delete workspace</div>
+                    <div className="danger-desc">
+                      Permanently deletes this workspace, all members, and all settings. This cannot be undone.
+                      Type <strong>{settings?.workspaceName || "workspace name"}</strong> to confirm.
+                    </div>
+                    <div className="confirm-input-wrap">
+                      <input
+                        className="confirm-input"
+                        type="text"
+                        placeholder={settings?.workspaceName || "Workspace name"}
+                        value={deleteConfirmName}
+                        onChange={(e) => setDeleteConfirmName(e.target.value)}
+                      />
+                      <button
+                        className="btn-danger"
+                        disabled={deleteConfirmName !== settings?.workspaceName || deletingWorkspace}
+                        onClick={deleteWorkspace}
+                      >
+                        {deletingWorkspace ? "Deleting…" : "Delete workspace"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+
         </div>
       </main>
 

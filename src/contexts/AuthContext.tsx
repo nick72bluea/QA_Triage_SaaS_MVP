@@ -71,10 +71,10 @@ const PUBLIC_ROUTES = [
   "/login/setup-pin",
 ];
 
-// Frictionless routes for external testers
+// Frictionless routes for external testers + join links
 const isFrictionlessRoute = (path: string | null) => {
   if (!path) return false;
-  return path.startsWith("/tester") || path.startsWith("/mobile-upload");
+  return path.startsWith("/tester") || path.startsWith("/mobile-upload") || path.startsWith("/join");
 };
 
 const isPublicRoute = (path: string | null) => {
