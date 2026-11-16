@@ -534,7 +534,7 @@ export default function PMTriageDashboard() {
       onTicketReady: (id, draft) => setDraftingModal(prev => ({ ...prev, tickets: prev.tickets.map(t => t.id === id ? { ...t, ...draft, status: 'ready' } : t) })),
       onTicketError: (id, error) => {
         console.warn(`Draft failed for ${id}:`, error); // Suppress Next.js red screen overlay
-        alert("AI Drafting Paused: Anthropic API returned an error (likely out of credits or invalid API key — check Settings → AI Configuration).");
+        alert(`AI drafting paused: ${error}`);
         setDraftingModal(prev => ({ ...prev, tickets: prev.tickets.map(t => t.id === id ? { ...t, status: 'queued' } : t) }));
       },
       onDone: () => {},
@@ -564,7 +564,7 @@ export default function PMTriageDashboard() {
       }));
     } catch (err) {
       setDraftingModal(prev => ({ ...prev, refining: false }));
-      alert('Refinement failed. Please try again.');
+      alert(err instanceof Error ? err.message : 'Refinement failed. Please try again.');
     }
   };
 

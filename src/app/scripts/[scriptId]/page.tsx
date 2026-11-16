@@ -201,18 +201,25 @@ export default function ScriptBuilderPage() {
         signal: abortControllerRef.current.signal
       });
 
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Step generation failed (${res.status})`);
+      }
       if (!res.body) throw new Error('No stream returned');
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
-      
+      let buffer = '';
+
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
-        
-        const chunk = decoder.decode(value);
-        const events = chunk.split('\n\n').filter(Boolean);
-        
+
+        // Events can be split across network chunks — keep the incomplete tail.
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split('\n\n');
+        buffer = events.pop() || '';
+
         for (const ev of events) {
           const lines = ev.split('\n');
           const eventType = lines.find(l => l.startsWith('event:'))?.replace('event: ', '');
@@ -264,10 +271,11 @@ export default function ScriptBuilderPage() {
         body: JSON.stringify({ step, instruction: refineText, accountId: currentAccountId })
       });
       const data = await res.json();
+      if (!res.ok || !data.step) throw new Error(data.error || 'Refinement failed');
       setAiSteps(prev => prev.map(s => s.id === step.id ? data.step : s));
       setRefiningStepId(null);
       setRefineText('');
-    } catch (e) { alert("Refinement failed"); setRefiningStepId(null); }
+    } catch (e) { alert(e instanceof Error ? e.message : "Refinement failed"); setRefiningStepId(null); }
   };
 
   const acceptAll = () => {

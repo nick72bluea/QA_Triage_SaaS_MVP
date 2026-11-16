@@ -1,6 +1,18 @@
 import { NextResponse } from 'next/server';
+import type Anthropic from '@anthropic-ai/sdk';
 import { requireMember, errorResponse } from '@/lib/server-auth';
 import { getAccountSecrets } from '@/lib/secrets';
+import {
+  CLAUDE_MODEL, FALLBACK_BETA, GeneratedStepsSchema,
+  claudeClient, claudeErrorMessage, assertUsableStop,
+} from '@/lib/claude';
+import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
+
+// Generates manual test steps from Figma design frames, streaming each step
+// to the browser as soon as Claude has written it (server-sent events):
+//   event: status  data: reading-designs | streaming | review
+//   event: step    data: { id, action, expectedResult, priority, area, aiCitation }
+//   event: error   data: <message>
 
 // Design images may only be fetched from these hosts (Figma exports and our
 // own Firebase Storage). Stops this route being used to fetch arbitrary URLs.
@@ -9,6 +21,15 @@ const ALLOWED_IMAGE_HOSTS = [
   'storage.googleapis.com',
   'figma-alpha-api.s3.us-west-2.amazonaws.com',
 ];
+const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'] as const;
+type ImageType = (typeof IMAGE_TYPES)[number];
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
+interface Frame {
+  id: string;
+  name?: string;
+  imageUrl: string;
+}
 
 function isAllowedImageUrl(raw: unknown): boolean {
   if (typeof raw !== 'string') return false;
@@ -19,6 +40,16 @@ function isAllowedImageUrl(raw: unknown): boolean {
   } catch {
     return false;
   }
+}
+
+async function loadFrameImage(frame: Frame): Promise<Anthropic.Beta.BetaImageBlockParam> {
+  const res = await fetch(frame.imageUrl, { redirect: 'error' });
+  if (!res.ok) throw new Error(`Couldn't load the image for frame "${frame.name || frame.id}".`);
+  const type = (res.headers.get('content-type') || '').split(';')[0].trim() as ImageType;
+  if (!IMAGE_TYPES.includes(type)) throw new Error(`Frame "${frame.name || frame.id}" is not a PNG, JPEG, GIF or WebP image.`);
+  const bytes = Buffer.from(await res.arrayBuffer());
+  if (bytes.length > MAX_IMAGE_BYTES) throw new Error(`Frame "${frame.name || frame.id}" is larger than 5 MB.`);
+  return { type: 'image', source: { type: 'base64', media_type: type, data: bytes.toString('base64') } };
 }
 
 export async function POST(req: Request) {
@@ -33,7 +64,7 @@ export async function POST(req: Request) {
   if (!Array.isArray(frames) || frames.length === 0 || frames.length > 20) {
     return NextResponse.json({ error: 'Select between 1 and 20 frames.' }, { status: 400 });
   }
-  if (!frames.every((f: { imageUrl?: unknown }) => isAllowedImageUrl(f?.imageUrl))) {
+  if (!frames.every((f: Partial<Frame>) => typeof f?.id === 'string' && isAllowedImageUrl(f.imageUrl))) {
     return NextResponse.json({ error: 'One or more frame images come from an unsupported address.' }, { status: 400 });
   }
 
@@ -44,107 +75,99 @@ export async function POST(req: Request) {
   } catch (err) {
     console.warn('Could not load workspace aiToken — using server env key', err);
   }
-
-  if (!apiKey) return NextResponse.json({ error: 'Missing Anthropic API Key' }, { status: 500 });
+  if (!apiKey) {
+    return NextResponse.json({ error: 'No Anthropic API key configured. Add one in Settings → AI Configuration.' }, { status: 500 });
+  }
 
   const encoder = new TextEncoder();
   const stream = new TransformStream();
   const writer = stream.writable.getWriter();
+  // SSE data must be one line, so error text is flattened.
+  const send = (event: string, data: string) =>
+    writer.write(encoder.encode(`event: ${event}\ndata: ${data.replace(/\n/g, ' ')}\n\n`));
+
+  const frameNames = new Map<string, string>((frames as Frame[]).map((f) => [f.id, f.name || f.id]));
+  const emitted = new Set<string>();
+
+  // Sends a parsed step once, in the shape the scripts page expects.
+  const emitStep = async (raw: unknown) => {
+    const parsed = GeneratedStepsSchema.shape.steps.element.safeParse(raw);
+    if (!parsed.success) return;
+    const key = JSON.stringify(parsed.data);
+    if (emitted.has(key)) return;
+    emitted.add(key);
+    const { frameId, ...step } = parsed.data;
+    await send('step', JSON.stringify({
+      ...step,
+      id: `ai_${crypto.randomUUID()}`,
+      aiCitation: frameNames.has(frameId) ? { frameId, frameName: frameNames.get(frameId) } : undefined,
+    }));
+  };
 
   const generate = async () => {
     try {
-      // 1. Tell frontend we are reading designs
-      await writer.write(encoder.encode(`event: status\ndata: reading-designs\n\n`));
+      await send('status', 'reading-designs');
+      const images = await Promise.all((frames as Frame[]).map(loadFrameImage));
 
-      // 2. Fetch and convert cached images to Base64 for Claude
-      const imageContents = await Promise.all(frames.map(async (frame: any) => {
-        const res = await fetch(frame.imageUrl);
-        const arrayBuffer = await res.arrayBuffer();
-        const base64 = Buffer.from(arrayBuffer).toString('base64');
-        return {
-          type: 'image',
-          source: { type: 'base64', media_type: 'image/jpeg', data: base64 }
-        };
-      }));
-
-      // 3. Tell frontend we are starting the stream
-      await writer.write(encoder.encode(`event: status\ndata: streaming\n\n`));
-
-      const systemPrompt = `You are an expert QA engineer. Analyze the provided design frames for the feature "${scriptName}". ${description ? `Context: ${description}` : ''}
-      Generate a comprehensive list of manual testing steps (UI checks, interactions, edge cases).
-      Output STRICTLY a JSON array of objects. Format: [{"action": "Click X", "expectedResult": "Y opens", "priority": "High", "area": "Auth", "frameId": "source_frame_id"}]. Do not output markdown code blocks or any other text.`;
-
-      // 4. Call Anthropic
-      const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01'
-        },
-        body: JSON.stringify({
-          model: 'claude-3-5-sonnet-20240620',
-          max_tokens: 4000,
-          temperature: 0.2,
-          system: systemPrompt,
-          messages: [
-            {
-              role: 'user',
-              content: [
-                ...imageContents,
-                { type: 'text', text: 'Generate the JSON array of test steps.' }
-              ]
-            }
-          ],
-          stream: true
-        })
+      // Label each image with its frame ID so Claude can cite the source frame.
+      const content: Anthropic.Beta.BetaContentBlockParam[] = [];
+      (frames as Frame[]).forEach((frame, i) => {
+        content.push({ type: 'text', text: `Frame ${frame.id} ("${frame.name || 'untitled'}"):` });
+        content.push(images[i]);
+      });
+      content.push({
+        type: 'text',
+        text: [
+          `Feature: ${scriptName || 'Untitled script'}`,
+          description ? `Context from the PM: ${description}` : '',
+          'Write the manual test steps for these designs.',
+        ].filter(Boolean).join('\n'),
       });
 
-      if (!anthropicRes.ok) throw new Error('Anthropic API Error');
+      await send('status', 'streaming');
+      const claudeStream = claudeClient(apiKey).beta.messages.stream({
+        model: CLAUDE_MODEL,
+        max_tokens: 64000,
+        betas: [FALLBACK_BETA],
+        fallbacks: 'default',
+        output_config: { effort: 'high', format: betaZodOutputFormat(GeneratedStepsSchema) },
+        system:
+          'You are an expert QA engineer. From the design frames provided, write a thorough list of manual test steps covering UI checks, interactions and edge cases. ' +
+          'Each step has one clear action and an observable expected result. Set frameId to the ID of the frame the step is based on, and area to a short feature-area label such as "Auth" or "Checkout".',
+        messages: [{ role: 'user', content }],
+      });
 
-      // 5. Robust Streaming JSON Parser (Backend side)
-      const reader = anthropicRes.body?.getReader();
-      let buffer = '';
-      let stepIndex = 0;
-
-      while (true) {
-        const { done, value } = await reader!.read();
-        if (done) break;
-        
-        const chunk = new TextDecoder().decode(value);
-        const lines = chunk.split('\n');
-        
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = JSON.parse(line.slice(5));
-            if (data.type === 'content_block_delta') {
-              buffer += data.delta.text;
-              
-              // Extract complete JSON objects as they form
-              const stepMatches = buffer.match(/\{[^}]+\}/g);
-              if (stepMatches) {
-                for (const match of stepMatches) {
-                  try {
-                    const parsedStep = JSON.parse(match);
-                    // Emit the completed step to the frontend
-                    await writer.write(encoder.encode(`event: step\ndata: ${JSON.stringify({...parsedStep, id: `ai_${crypto.randomUUID()}`})}\n\n`));
-                    // Remove the parsed portion from the buffer
-                    buffer = buffer.replace(match, '');
-                  } catch (e) {
-                    // JSON not fully formed yet, ignore and keep buffering
-                  }
-                }
-              }
-            }
+      // Emit each step object as soon as it is complete in the streamed JSON.
+      let text = '';
+      let scanFrom = 0;
+      for await (const event of claudeStream) {
+        if (event.type !== 'content_block_delta' || event.delta.type !== 'text_delta') continue;
+        text += event.delta.text;
+        const objectPattern = /\{[^{}]*\}/g;
+        objectPattern.lastIndex = scanFrom;
+        let match: RegExpExecArray | null;
+        while ((match = objectPattern.exec(text))) {
+          scanFrom = objectPattern.lastIndex;
+          try {
+            await emitStep(JSON.parse(match[0]));
+          } catch {
+            // Braces inside a string can produce a fragment; the final parse below catches up.
           }
         }
       }
 
-      await writer.write(encoder.encode(`event: status\ndata: review\n\n`));
-    } catch (error: any) {
-      await writer.write(encoder.encode(`event: error\ndata: ${error.message}\n\n`));
+      const final = await claudeStream.finalMessage();
+      assertUsableStop(final.stop_reason);
+      // Catch any step the incremental scan missed.
+      const all = GeneratedStepsSchema.safeParse(JSON.parse(text || '{}'));
+      if (all.success) for (const step of all.data.steps) await emitStep(step);
+
+      await send('status', 'review');
+    } catch (error) {
+      console.error('generate_steps error:', error);
+      await send('error', claudeErrorMessage(error));
     } finally {
-      writer.close();
+      await writer.close();
     }
   };
 

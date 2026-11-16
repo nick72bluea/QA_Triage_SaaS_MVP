@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 import { requireMember, errorResponse } from '@/lib/server-auth';
 import { getAccountSecrets } from '@/lib/secrets';
+import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
+import {
+  CLAUDE_MODEL, FALLBACK_BETA, TicketDraftSchema,
+  claudeClient, claudeErrorMessage, assertUsableStop,
+} from '@/lib/claude';
 
 export async function POST(req: Request) {
   const { draft, refinement, accountId } = await req.json();
@@ -28,32 +33,17 @@ export async function POST(req: Request) {
     );
   }
 
+  if (typeof refinement !== 'string' || !refinement.trim() || refinement.length > 2000) {
+    return NextResponse.json({ error: 'Describe the change you want (up to 2000 characters).' }, { status: 400 });
+  }
+
   try {
-    const systemPrompt = `You are refining an existing Jira bug ticket draft based on user feedback.
+    const systemPrompt = `You refine an existing Jira bug ticket draft according to the user's instruction, and return the complete ticket.
 
-User's refinement instruction: "${refinement}"
-
-You will be given the current draft as JSON. Apply the requested change and return the FULL ticket JSON with the same shape — do not omit any fields.
-
-Output STRICTLY a JSON object with this exact shape, no markdown:
-
-{
-  "title": "...",
-  "description": "...",
-  "stepsToReproduce": ["..."],
-  "expectedBehavior": "...",
-  "actualBehavior": "...",
-  "severity": "Critical|High|Medium|Low|Enhancement",
-  "severityReasoning": "...",
-  "environment": [...],
-  "citations": [...]
-}
-
-Rules:
-- Preserve any [cN] citation markers and the citations array structure unless the refinement specifically asks to remove them.
-- If the refinement asks to remove a section's content, keep the field but make it brief — don't drop the field entirely.
-- Don't invent new sources or testers — work with what's in the draft.
-- Keep severity unchanged unless the refinement is specifically about severity.`;
+- Keep the [cN] citation markers and the citations array unless the instruction asks to remove them; every [cN] still in the text needs its citations entry.
+- If the instruction asks to remove a section's content, keep the field but make it brief.
+- Don't invent new sources or testers — work only with what's in the draft.
+- Keep severity unchanged unless the instruction is about severity.`;
 
     const userMessage = `Current draft:\n${JSON.stringify({
       title: draft.title,
@@ -65,37 +55,21 @@ Rules:
       severityReasoning: draft.severityReasoning,
       environment: draft.environment,
       citations: draft.citations,
-    }, null, 2)}\n\nReturn the refined ticket as JSON.`;
+    }, null, 2)}\n\nInstruction: ${refinement.trim()}`;
 
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-3-5-sonnet-20241022',
-        max_tokens: 2000,
-        temperature: 0.3,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userMessage }],
-      }),
+    const response = await claudeClient(apiKey).beta.messages.parse({
+      model: CLAUDE_MODEL,
+      max_tokens: 16000,
+      betas: [FALLBACK_BETA],
+      fallbacks: 'default',
+      output_config: { effort: 'medium', format: betaZodOutputFormat(TicketDraftSchema) },
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userMessage }],
     });
 
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`Anthropic API error: ${res.status} ${errText.slice(0, 200)}`);
-    }
-
-    const data = await res.json();
-    const rawText = data.content?.[0]?.text;
-    if (!rawText) throw new Error('No content in Anthropic response');
-
-    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('No JSON object found in response');
-
-    const refined = JSON.parse(jsonMatch[0]);
+    assertUsableStop(response.stop_reason);
+    const refined = response.parsed_output;
+    if (!refined) throw new Error('The AI returned a ticket in an unexpected format.');
 
     // Merge refined fields back onto the original draft so we preserve
     // identity fields (id, runIds, stepId, sources, evidenceUrls, etc.)
@@ -113,8 +87,8 @@ Rules:
         citations: refined.citations ?? draft.citations,
       },
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Refine error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: claudeErrorMessage(error) }, { status: 502 });
   }
 }

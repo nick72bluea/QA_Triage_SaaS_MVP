@@ -65,7 +65,8 @@ export async function refineDraft(draft: AIDraftedTicket, refinement: string, ac
   });
   
   if (!res.ok) {
-    throw new Error('Failed to refine draft');
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to refine draft');
   }
 
   const data = await res.json();
