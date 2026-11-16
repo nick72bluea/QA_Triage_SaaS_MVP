@@ -13,6 +13,7 @@ import {
   doc,
   getDoc,
   setDoc,
+  deleteField,
   collection,
   query,
   where,
@@ -69,6 +70,10 @@ export interface AuthContextValue {
   signOut: () => Promise<void>;
   fullSignOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  /** Call right after a magic-link sign-in: unlocks the app, and finishes a "Forgot PIN" reset. */
+  afterMagicLinkSignIn: () => Promise<void>;
+  /** Change the signed-in user's display name everywhere it's shown. */
+  updateDisplayName: (name: string) => Promise<void>;
 }
 
 const PUBLIC_ROUTES = [
@@ -93,6 +98,8 @@ const isPublicRoute = (path: string | null) => {
 const PIN_VERIFIED_KEY = "pinVerified";
 // Super users looking inside a workspace they aren't a member of (per tab).
 const SUPER_VIEW_KEY = "proofdeck_super_view";
+// Set by "Forgot PIN?" — the next magic-link sign-in clears the PIN.
+export const PIN_RESET_KEY = "proofdeck_pin_reset";
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
@@ -327,6 +334,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Explicit exception for Tester and Mobile Upload flows
     if (isFrictionlessRoute(pathname)) return null; 
 
+    // Let a magic link finish signing in before any PIN gate kicks in —
+    // a fresh email sign-in proves identity better than a PIN.
+    if (pathname === "/login/verify") return null;
+
     // Not signed in → must be on /login (or other public routes)
     if (!user) {
       return isPublicRoute(pathname) ? null : "/login";
@@ -446,6 +457,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const canEdit = isSuperUser || currentRole === "owner" || currentRole === "admin" || currentRole === "member";
   const canManage = isSuperUser || currentRole === "owner" || currentRole === "admin";
 
+  const afterMagicLinkSignIn = useCallback(async () => {
+    const current = auth.currentUser;
+    if (!current) return;
+    const ref = doc(db, "users", current.uid);
+    try {
+      if (localStorage.getItem(PIN_RESET_KEY)) {
+        await setDoc(ref, { hasPinSet: false, pinHash: deleteField() }, { merge: true });
+        localStorage.removeItem(PIN_RESET_KEY);
+        sessionStorage.removeItem("pinSetupDismissed");
+      }
+    } catch (err) {
+      console.error("PIN reset failed", err);
+    }
+    setPinVerifiedState(true);
+    try { sessionStorage.setItem(PIN_VERIFIED_KEY, current.uid); } catch {}
+    const snap = await getDoc(ref);
+    if (snap.exists()) {
+      const fresh = snap.data() as UserProfile;
+      setProfile(fresh);
+      try {
+        localStorage.setItem("proofdeck_last_user", JSON.stringify({
+          displayName: fresh.displayName, email: fresh.email, hasPinSet: fresh.hasPinSet,
+        }));
+      } catch {}
+    }
+  }, []);
+
+  const updateDisplayName = useCallback(async (name: string) => {
+    const clean = name.trim().slice(0, 80);
+    if (!user || !clean) return;
+    await setDoc(doc(db, "users", user.uid), { displayName: clean }, { merge: true });
+    // Membership docs carry a copy for the members list.
+    await Promise.all(
+      accounts.map((a) =>
+        setDoc(doc(db, "accountMembers", `${a.accountId}_${user.uid}`), { displayName: clean }, { merge: true })
+          .catch((err) => console.warn("Couldn't update name on membership", a.accountId, err))
+      )
+    );
+    setProfile((p) => (p ? { ...p, displayName: clean } : p));
+  }, [user, accounts]);
+
   const value: AuthContextValue = {
     user,
     profile,
@@ -462,6 +514,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signOut,
     fullSignOut,
     refreshProfile,
+    afterMagicLinkSignIn,
+    updateDisplayName,
   };
 
   const shouldHideContent =

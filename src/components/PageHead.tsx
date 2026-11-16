@@ -42,87 +42,41 @@ export function PageHead({ eyebrow, title, sub, actions }: PageHeadProps) {
       : null;
 
   return (
-    <div className="page-head">
-      <div className="page-head-text">
+    <div className="pd-head">
+      {/* Plain <style>: `<style jsx>` isn't compiled in this app, so the
+          previous styles never applied. Class names are prefixed so pages
+          that define their own .page-head rules can't clash. */}
+      <style dangerouslySetInnerHTML={{ __html: PAGE_HEAD_CSS }} />
+      <div className="pd-head-text">
         {eyebrowSegments && (
-          <div className="page-eyebrow">
+          <div className="pd-head-eyebrow">
             {eyebrowSegments.map((segment, i) => (
               <React.Fragment key={i}>
-                {i > 0 && <span className="sep">·</span>}
+                {i > 0 && <span className="pd-head-sep">·</span>}
                 <span>{segment}</span>
               </React.Fragment>
             ))}
           </div>
         )}
-        <h1 className="page-title">{title}</h1>
-        {sub && <p className="page-sub">{sub}</p>}
+        <h1 className="pd-head-title">{title}</h1>
+        {sub && <p className="pd-head-sub">{sub}</p>}
       </div>
-      {actions && <div className="page-head-actions">{actions}</div>}
-
-      <style jsx>{`
-        .page-head {
-          margin-bottom: 32px;
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-end;
-          gap: 24px;
-        }
-        .page-head-text {
-          min-width: 0;
-        }
-        .page-eyebrow {
-          font-family: 'JetBrains Mono', monospace;
-          font-size: 10px;
-          text-transform: uppercase;
-          letter-spacing: 0.14em;
-          color: var(--ink-mute);
-          margin-bottom: 6px;
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          font-weight: 500;
-        }
-        .page-eyebrow :global(.sep) {
-          opacity: 0.4;
-        }
-        .page-title {
-          font-family: 'Fraunces', serif;
-          font-size: 36px;
-          font-weight: 600;
-          letter-spacing: -0.025em;
-          margin: 0 0 6px;
-          line-height: 1.05;
-          color: var(--ink);
-        }
-        .page-title :global(em) {
-          font-style: italic;
-          color: var(--accent);
-          font-weight: 500;
-        }
-        .page-sub {
-          color: var(--ink-mute);
-          font-size: 14px;
-          margin: 0;
-          max-width: 560px;
-          line-height: 1.5;
-        }
-        .page-head-actions {
-          display: flex;
-          gap: 10px;
-          flex-shrink: 0;
-        }
-
-        @media (max-width: 768px) {
-          .page-head {
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 16px;
-          }
-          .page-title {
-            font-size: 28px;
-          }
-        }
-      `}</style>
+      {actions && <div className="pd-head-actions">{actions}</div>}
     </div>
   );
 }
+
+const PAGE_HEAD_CSS = `
+  .pd-head { margin-bottom: 32px; display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; }
+  .pd-head-text { min-width: 0; }
+  .pd-head-eyebrow { font-family: 'JetBrains Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--ink-mute); margin-bottom: 6px; display: flex; align-items: center; gap: 6px; font-weight: 500; }
+  .pd-head-sep { opacity: 0.4; }
+  .pd-head-title { font-family: var(--font-display, 'Fraunces', serif); font-size: 36px; font-weight: 600; letter-spacing: -0.025em; margin: 0 0 6px; line-height: 1.05; color: var(--ink); }
+  .pd-head-title em { font-style: italic; color: var(--accent); font-weight: 500; }
+  .pd-head-sub { color: var(--ink-mute); font-size: 14px; margin: 0; max-width: 560px; line-height: 1.5; }
+  .pd-head-actions { display: flex; gap: 10px; flex-shrink: 0; flex-wrap: wrap; }
+  @media (max-width: 768px) {
+    .pd-head { flex-direction: column; align-items: flex-start; gap: 16px; }
+    .pd-head-title { font-size: 28px; }
+  }
+`;

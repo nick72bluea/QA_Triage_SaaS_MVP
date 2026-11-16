@@ -618,7 +618,7 @@ const GlobalTesterStyles = React.memo(() => (
     .t-status { display: inline-flex; align-items: center; gap: 5px; font-family: 'JetBrains Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; padding: 3px 9px; border-radius: 10px; font-weight: 500; }
     .t-status.pass { color: var(--accent); background: var(--accent-soft); }
     .t-status.fail { color: var(--rose); background: var(--rose-soft); }
-    .timeline-action { font-family: 'Fraunces', serif; font-size: 17px; font-weight: 500; margin: 0 0 6px; line-height: 1.3; letter-spacing: -0.01em; color: var(--ink); }
+    .timeline-action { white-space: pre-line; font-family: 'Fraunces', serif; font-size: 17px; font-weight: 500; margin: 0 0 6px; line-height: 1.3; letter-spacing: -0.01em; color: var(--ink); }
     .timeline-expected { font-size: 13px; color: var(--ink-soft); margin: 0 0 10px; line-height: 1.5; }
     .timeline-notes { margin-top: 12px; padding: 12px 14px; background: rgba(216,138,144,0.05); border-left: 2px solid var(--rose); border-radius: 8px; }
     .t-notes-label { font-family: 'JetBrains Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--rose); font-weight: 500; margin-bottom: 6px; }
@@ -2167,12 +2167,11 @@ export default function TesterExecutionEngine() {
               const finalMin = Math.floor(secTotal / 60);
               const finalSec = String(secTotal % 60).padStart(2, '0');
 
-              let pct = 25;
-              if (secTotal < 120) pct = 95;
-              else if (secTotal < 180) pct = 88;
-              else if (secTotal < 240) pct = 82;
-              else if (secTotal < 360) pct = 65;
-              else if (secTotal < 600) pct = 45;
+              // Real numbers only — this used to show a made-up "faster than N% of testers".
+              const secPerStep = totalStepsCount > 0 ? Math.max(1, Math.round(secTotal / totalStepsCount)) : 0;
+              const perStepLabel = secPerStep >= 60
+                ? `${Math.floor(secPerStep / 60)}m ${secPerStep % 60}s`
+                : `${secPerStep}s`;
 
               return (
                 <>
@@ -2234,8 +2233,8 @@ export default function TesterExecutionEngine() {
                         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="13 2 13 13 21 13"/><path d="M13 2A10 10 0 103 12"/></svg>
                       </div>
                       <div className="pct-text">
-                        <h3 className="pct-headline">Faster than <em>{pct}%</em> of testers</h3>
-                        <p className="pct-sub">On projects this size · {runData.testCycle || 'UAT'} cycles</p>
+                        <h3 className="pct-headline">About <em>{perStepLabel}</em> per step</h3>
+                        <p className="pct-sub">Your average across {totalStepsCount} step{totalStepsCount === 1 ? '' : 's'}{runData.testCycle ? ` · ${runData.testCycle}` : ''}</p>
                       </div>
                     </div>
 

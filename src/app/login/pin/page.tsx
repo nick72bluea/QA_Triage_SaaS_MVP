@@ -2,7 +2,8 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth, PIN_RESET_KEY } from "@/contexts/AuthContext";
+import { sendMagicLink } from "@/lib/auth";
 import { postLoginPath } from "@/lib/post-login";
 
 const PinStyles = React.memo(() => (
@@ -125,6 +126,23 @@ export default function PinPage() {
   const [verifying, setVerifying] = useState(false);
   const [attempts, setAttempts] = useState(0);
   const verifyingRef = useRef(false);
+  const [resetState, setResetState] = useState<"idle" | "sending" | "sent" | "error">("idle");
+
+  // Forgot PIN: email a sign-in link. Opening it proves it's really you,
+  // clears the old PIN, and lets you choose a new one.
+  const forgotPin = async () => {
+    const email = profile?.email || user?.email;
+    if (!email || resetState === "sending") return;
+    setResetState("sending");
+    try {
+      localStorage.setItem(PIN_RESET_KEY, "1");
+      await sendMagicLink(email);
+      setResetState("sent");
+    } catch {
+      localStorage.removeItem(PIN_RESET_KEY);
+      setResetState("error");
+    }
+  };
 
   const firstName = profile?.displayName?.split(" ")[0] || "you";
 
@@ -264,10 +282,26 @@ export default function PinPage() {
           <div /> {/* spacer */}
         </div>
 
+        {resetState === "sent" && (
+          <p style={{ textAlign: "center", fontSize: 13, color: "var(--ink-soft, #55524d)", margin: "16px 0 0", lineHeight: 1.5 }}>
+            We&apos;ve emailed a sign-in link to <b>{profile?.email || user?.email}</b>. Open it to reset your PIN.
+          </p>
+        )}
+        {resetState === "error" && (
+          <p style={{ textAlign: "center", fontSize: 13, color: "#a6421f", margin: "16px 0 0" }}>
+            Couldn&apos;t send the reset email. Please try again.
+          </p>
+        )}
+
         <div className="pin-actions">
           <button className="pin-action-link" onClick={fullSignOut}>
             ← Use a different account
           </button>
+          {resetState !== "sent" && (
+            <button className="pin-action-link" onClick={forgotPin} disabled={resetState === "sending"}>
+              {resetState === "sending" ? "Sending…" : "Forgot PIN?"}
+            </button>
+          )}
           {verifying && (
             <span className="pin-action-link">
               Verifying<span className="pin-spinner" />

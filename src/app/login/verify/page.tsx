@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { completeMagicLinkSignIn } from "@/lib/auth";
+import { useAuth } from "@/contexts/AuthContext";
 import { postLoginPath } from "@/lib/post-login";
 
 const VerifyStyles = React.memo(() => (
@@ -67,6 +68,7 @@ type Status = "verifying" | "success" | "error" | "no-link";
 
 export default function VerifyPage() {
   const router = useRouter();
+  const { afterMagicLinkSignIn } = useAuth();
   const [status, setStatus] = useState<Status>("verifying");
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -83,6 +85,8 @@ export default function VerifyPage() {
           return;
         }
 
+        await afterMagicLinkSignIn();
+        if (cancelled) return;
         setStatus("success");
         // AuthContext will pick up the user and route appropriately.
         // Give it a beat, then redirect to /home as the post-login destination.
@@ -102,7 +106,7 @@ export default function VerifyPage() {
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, [router, afterMagicLinkSignIn]);
 
   return (
     <div className="auth-page" suppressHydrationWarning>

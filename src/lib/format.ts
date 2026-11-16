@@ -84,3 +84,7 @@ export function formatRelative(value: Date | Timestamp | number | null | undefin
   // Beyond a week, fall back to absolute date — relative loses meaning
   return formatDate(date);
 }
+/** "1 tester", "3 testers" — pass a custom plural for irregular words. */
+export function plural(count: number, singular: string, pluralForm = `${singular}s`): string {
+  return `${count} ${count === 1 ? singular : pluralForm}`;
+}

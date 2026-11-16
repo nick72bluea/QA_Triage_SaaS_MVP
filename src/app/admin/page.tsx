@@ -157,7 +157,7 @@ const AdminStyles = React.memo(() => (
     .script-step:hover .step-drag { opacity: 1; }
     .step-num { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 500; color: var(--ink-mute); padding: 4px 8px; background: var(--surface-alt); border: 1px solid var(--line); border-radius: 4px; text-align: center; margin-top: 2px; }
     .step-body { flex: 1; min-width: 0; }
-    .step-action.editable { width: 100%; border: none; background: transparent; font-family: inherit; font-size: 14px; font-weight: 500; color: var(--ink); padding: 4px 8px; margin: -4px -8px; border-radius: 4px; outline: none; transition: background 0.1s ease; }
+    .step-action.editable { width: 100%; resize: vertical; display: block; line-height: 1.5; border: none; background: transparent; font-family: inherit; font-size: 14px; font-weight: 500; color: var(--ink); padding: 4px 8px; margin: -4px -8px; border-radius: 4px; outline: none; transition: background 0.1s ease; }
     .step-action.editable:hover { background: var(--surface-alt); }
     .step-action.editable:focus { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
     .step-expected { font-size: 12.5px; color: var(--ink-mute); line-height: 1.45; display: flex; gap: 6px; }
@@ -893,7 +893,7 @@ export default function AdminPage() {
                       </div>
                       <div className="step-num">{nn}</div>
                       <div className="step-body">
-                        <input className="step-action editable" defaultValue={step.action} onBlur={e => handleInlineUpdate(step.id, 'action', e.target.value)} />
+                        <textarea className="step-action editable" defaultValue={step.action} rows={Math.max(1, (step.action || '').split('\n').length)} onBlur={e => handleInlineUpdate(step.id, 'action', e.target.value)} />
                         <div className="step-expected">
                           <textarea className="step-expected editable" defaultValue={step.expectedResult} onBlur={e => handleInlineUpdate(step.id, 'expectedResult', e.target.value)} rows={2} />
                         </div>

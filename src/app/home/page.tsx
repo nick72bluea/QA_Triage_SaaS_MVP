@@ -1,5 +1,7 @@
 "use client";
 
+import { plural } from '@/lib/format';
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { collection, onSnapshot, addDoc, serverTimestamp, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import Papa from 'papaparse';
@@ -788,7 +790,7 @@ export default function PMHomeDashboard() {
         <div className="hero-head">
           <div>
             <div className="hero-eyebrow">
-              <span>Workspace · {projects.length} projects</span>
+              <span>Workspace · {plural(projects.length, 'project')}</span>
               <span style={{ opacity: 0.5 }}>—</span>
               {/* greeting updates after hydration but 'Good morning' is safe default */}
               <span className="time-now">{greeting}, {profile?.displayName || profile?.email?.split('@')[0] || 'there'}</span>
@@ -818,23 +820,38 @@ export default function PMHomeDashboard() {
         </div>
 
         <div className="currently">
-          <div className="module resume-module" onClick={() => projects[0] && router.push('/admin')}>
-            <div className="module-label">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-              Pick up where you left off
+          {/* Uses processedProjects (which has pct/testerCount) — `projects` has no pct, so this used to always show 0%. */}
+          {processedProjects[0] ? (
+            <div className="module resume-module" onClick={() => router.push('/admin')}>
+              <div className="module-label">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                Pick up where you left off
+              </div>
+              <h2 className="resume-title">{processedProjects[0].name}</h2>
+              <p className="resume-sub">Your most recently created testing cycle.</p>
+              <div className="resume-stats">
+                <div className="resume-stat"><div className="rs-label">Steps</div><div className="rs-value">{processedProjects[0].totalSteps}</div></div>
+                <div className="resume-stat"><div className="rs-label">Testers</div><div className="rs-value">{processedProjects[0].testerCount}</div></div>
+                <div className="resume-stat"><div className="rs-label">Progress</div><div className="rs-value">{processedProjects[0].pct}%</div></div>
+              </div>
+              <button className="resume-action">
+                Manage Project
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+              </button>
             </div>
-            <h2 className="resume-title">{projects[0]?.name || 'No projects'}</h2>
-            <p className="resume-sub">Jump directly into your most recently active testing cycle.</p>
-            <div className="resume-stats">
-              <div className="resume-stat"><div className="rs-label">Steps</div><div className="rs-value">{projects[0]?.totalSteps || 0}</div></div>
-              <div className="resume-stat"><div className="rs-label">Testers</div><div className="rs-value">{projects[0]?.runs?.filter((r:any) => r.testerName !== 'Unassigned').length || 0}</div></div>
-              <div className="resume-stat"><div className="rs-label">Progress</div><div className="rs-value">{projects[0]?.pct || 0}%</div></div>
+          ) : (
+            <div className="module resume-module">
+              <div className="module-label">Get started</div>
+              <h2 className="resume-title">No projects yet</h2>
+              <p className="resume-sub">Create a project, add your test steps, and send testers their links.</p>
+              {canEdit && (
+                <button className="resume-action" onClick={() => setWizOpen(true)}>
+                  Create your first project
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                </button>
+              )}
             </div>
-            <button className="resume-action">
-              Manage Project
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-            </button>
-          </div>
+          )}
 
           <div className="module feed-module">
             <div className="module-label"><span className="live-dot"></span> Live activity</div>
@@ -944,7 +961,7 @@ export default function PMHomeDashboard() {
                         <span className="project-name">{p.name}</span>
                         {isLive && <span className="tag live">Live</span>}
                       </div>
-                      <div className="project-story">In progress <span className="dot-sep">·</span> {p.totalSteps} steps</div>
+                      <div className="project-story">In progress <span className="dot-sep">·</span> {plural(p.totalSteps, 'step')}</div>
                     </div>
                     <div className="avatar-block">
                       <div className="avatar-block-label">Testers {isLive ? '· Live' : ''}</div>

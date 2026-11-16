@@ -211,11 +211,13 @@ GlobalSettingsStyles.displayName = "GlobalSettingsStyles";
 
 export default function WorkspaceSettingsPage() {
   const { settings, loading, save, accountId } = useWorkspaceSettings();
-  const { user, currentAccountId, currentRole, fullSignOut, canManage } = useAuth();
+  const { user, profile, currentAccountId, currentRole, fullSignOut, canManage, updateDisplayName } = useAuth();
+  const [nameDraft, setNameDraft] = useState<string | null>(null);
+  const [savingName, setSavingName] = useState(false);
 
   const [formData, setFormData] = useState<WorkspaceSettings | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [activeSection, setActiveSection] = useState("identity");
+  const [activeSection, setActiveSection] = useState("profile");
   const [toast, setToast] = useState<{ msg: string; type: "ok" | "error" } | null>(null);
   const [logoUploading, setLogoUploading] = useState(false);
   const [hydrated, setHydrated] = useState(false);
@@ -435,6 +437,11 @@ export default function WorkspaceSettingsPage() {
         }
       }
       await save(formData);
+      // Keep the account's name (shown in the workspace switcher) in step
+      // with the name shown in the sidebar.
+      if (currentAccountId && formData.workspaceName.trim() && formData.workspaceName !== settings?.workspaceName) {
+        await updateDoc(fsDoc(db, "accounts", currentAccountId), { name: formData.workspaceName.trim() });
+      }
       setFormData((prev) => (prev ? { ...prev, jiraToken: "", aiToken: "", figmaToken: "" } : prev));
       showToast("Settings saved");
     } catch (err) {
@@ -501,7 +508,7 @@ export default function WorkspaceSettingsPage() {
 
   useEffect(() => {
     if (!hydrated) return;
-    const sections = ["identity", "branding", "integrations", "ai", "notifications", "members", "danger"];
+    const sections = ["profile", "identity", "branding", "integrations", "ai", "notifications", "members", "danger"];
     const handleScroll = () => {
       const scrollPos = window.scrollY + 140;
       let current = sections[0];
@@ -553,6 +560,7 @@ export default function WorkspaceSettingsPage() {
           <div className="section-nav-label">On this page</div>
           <nav className="section-nav-list">
             {[
+              { id: "profile", label: "Your profile" },
               { id: "identity", label: "Workspace identity" },
               { id: "branding", label: "Branding" },
               { id: "integrations", label: "Integrations" },
@@ -574,6 +582,48 @@ export default function WorkspaceSettingsPage() {
             title={<>Workspace <em>settings</em></>}
             sub="Configure how your workspace looks and behaves — branding, integrations, AI, and team."
           />
+
+          {/* YOUR PROFILE — personal, so every role can edit it */}
+          <section className="section" id="profile">
+            <div className="section-head">
+              <h2 className="section-title">Your profile</h2>
+              <p className="section-description">How your name appears to your team, in greetings and in the members list.</p>
+            </div>
+            <div className="section-card">
+              <div className="field-row">
+                <div><div className="field-label-name">Display name</div></div>
+                <div className="field-input" style={{ display: "flex", gap: 8 }}>
+                  <input
+                    className="input"
+                    value={nameDraft ?? profile?.displayName ?? ""}
+                    onChange={(e) => setNameDraft(e.target.value)}
+                    maxLength={80}
+                    placeholder="Your name"
+                  />
+                  <button
+                    className="btn-sm primary"
+                    disabled={savingName || nameDraft === null || !nameDraft.trim() || nameDraft.trim() === profile?.displayName}
+                    onClick={async () => {
+                      if (!nameDraft) return;
+                      setSavingName(true);
+                      try {
+                        await updateDisplayName(nameDraft);
+                        setMembers((prev) => prev.map((m) => (m.uid === user?.uid ? { ...m, displayName: nameDraft.trim() } : m)));
+                        setNameDraft(null);
+                        showToast("Name updated");
+                      } catch {
+                        showToast("Couldn't update your name", "error");
+                      } finally {
+                        setSavingName(false);
+                      }
+                    }}
+                  >
+                    {savingName ? "Saving…" : "Save"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
 
           {!canManage && (
             <p style={{ margin: "0 0 24px", color: "var(--ink-mute, #55524d)" }}>

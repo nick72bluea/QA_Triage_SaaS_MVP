@@ -126,6 +126,13 @@ service cloud.firestore {
         && request.resource.data.role in ['admin', 'member', 'viewer']
         && onlyChanges(['role']);
 
+      // Anyone can update the display name on their own membership.
+      allow update: if signedIn()
+        && resource.data.uid == request.auth.uid
+        && onlyChanges(['displayName'])
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() <= 80;
+
       // Admins can remove non-owners; anyone can leave; owners can remove anyone
       // (needed when deleting a workspace).
       allow delete: if signedIn() && (

@@ -115,6 +115,10 @@ test('members cannot promote themselves', async () => {
   await assertFails(updateDoc(doc(as('memberA'), 'accountMembers', `${A}_memberA`), { role: 'admin' }));
   await assertFails(updateDoc(doc(as('adminA'), 'accountMembers', `${A}_memberA`), { role: 'owner' }));
   await assertSucceeds(updateDoc(doc(as('adminA'), 'accountMembers', `${A}_memberA`), { role: 'viewer' }));
+  // you can rename yourself, but not someone else, and not your role
+  await assertSucceeds(updateDoc(doc(as('memberA'), 'accountMembers', `${A}_memberA`), { displayName: 'Mo' }));
+  await assertFails(updateDoc(doc(as('memberA'), 'accountMembers', `${A}_viewerA`), { displayName: 'Mo' }));
+  await assertFails(updateDoc(doc(as('memberA'), 'accountMembers', `${A}_memberA`), { displayName: 'Mo', role: 'owner' }));
 });
 
 test('creating a brand-new workspace works (same order as the app)', async () => {
