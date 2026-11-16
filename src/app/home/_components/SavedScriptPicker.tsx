@@ -80,7 +80,7 @@ export function SavedScriptPicker({ scripts, selectedId, onSelect, onChangePath 
         </div>
 
         <div style={{ fontSize: '11.5px', color: 'var(--ink-mute)', fontStyle: 'italic', marginTop: '12px' }}>
-          A copy is made for this cycle · later edits to your library don't affect a launched cycle.
+          A copy is made for this cycle · later edits to your library don&apos;t affect a launched cycle.
         </div>
       </div>
     </div>

@@ -105,7 +105,7 @@ export function Step2Script({
         </div>
         <div className="path-content">
           <h3 className="path-title">Saved Library</h3>
-          <p className="path-sub">Pick a pre-written test script from your team's workspace repository.</p>
+          <p className="path-sub">Pick a pre-written test script from your team&apos;s workspace repository.</p>
           
           {scriptPath === 'saved' && (
             <div className="sub-panel" onClick={e => e.stopPropagation()}>
@@ -132,7 +132,7 @@ export function Step2Script({
         </div>
         <div className="path-content">
           <h3 className="path-title">Upload CSV</h3>
-          <p className="path-sub">Import tests from Zephyr, TestRail, or Excel. We'll map the columns next.</p>
+          <p className="path-sub">Import tests from Zephyr, TestRail, or Excel. We&apos;ll map the columns next.</p>
           
           {scriptPath === 'csv' && (
             <div className="sub-panel" onClick={e => e.stopPropagation()}>

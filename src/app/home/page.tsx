@@ -729,7 +729,7 @@ export default function PMHomeDashboard() {
       }
 
       setWizStep(5);
-    } catch (error) {
+    } catch {
       alert('Failed to launch project.');
     } finally {
       setIsLaunching(false);

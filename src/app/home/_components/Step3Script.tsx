@@ -99,7 +99,7 @@ export function Step3Script({
               </select>
               {csvMapping[field.id] && csvRawData.length > 0 && (
                 <div className="preview-snippet">
-                  Sample: "{csvRawData[0][csvMapping[field.id]]}"
+                  Sample: &quot;{csvRawData[0][csvMapping[field.id]]}&quot;
                 </div>
               )}
             </div>

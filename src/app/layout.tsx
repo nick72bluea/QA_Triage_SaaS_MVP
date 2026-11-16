@@ -1,15 +1,12 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
-import ThemeProvider from "@/components/ThemeRegistry/ThemeProvider";
+import "./base.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { BrandingProvider } from "@/components/BrandingProvider";
-import { AppLayoutContent } from "@/components/AppLayoutContent"; // We will create this below
-
-const inter = Inter({ subsets: ["latin"], display: "swap" });
+import { AppLayoutContent } from "@/components/AppLayoutContent";
 
 export const metadata: Metadata = {
-  title: "QA Triage SaaS",
-  description: "Enterprise UAT and Bug Triage Platform",
+  title: "Proofdeck",
+  description: "Run UAT cycles, collect tester evidence, and triage results into Jira.",
 };
 
 export default function RootLayout({
@@ -18,16 +15,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={inter.className} suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <body suppressHydrationWarning>
-        <ThemeProvider>
-          <AuthProvider>
-            <BrandingProvider>
-              {/* Use a client wrapper to check the pathname and hide the shell */}
-              <AppLayoutContent>{children}</AppLayoutContent>
-            </BrandingProvider>
-          </AuthProvider>
-        </ThemeProvider>
+        <AuthProvider>
+          <BrandingProvider>
+            {/* Client wrapper: hides the sidebar on login and tester pages */}
+            <AppLayoutContent>{children}</AppLayoutContent>
+          </BrandingProvider>
+        </AuthProvider>
       </body>
     </html>
   );

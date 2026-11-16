@@ -1,0 +1,45 @@
+/* Base reset — reproduces exactly what MUI's <CssBaseline> used to inject,
+   so removing MUI changes nothing visually. Page components set their own
+   fonts and colours; BrandingProvider sets the design tokens on <html>.
+
+   Note: globals.css is NOT loaded (it never was). Loading it would change
+   layouts — see the phase 4 notes before importing it. */
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  box-sizing: border-box;
+  -webkit-text-size-adjust: 100%;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: inherit;
+}
+
+strong,
+b {
+  font-weight: 700;
+}
+
+body {
+  margin: 0;
+  color: #1e293b;
+  font-family: "Inter", "Helvetica", "Arial", sans-serif;
+  font-weight: 400;
+  font-size: 1rem;
+  line-height: 1.5;
+  letter-spacing: 0.00938em;
+  background-color: #f8fafc;
+}
+
+body::backdrop {
+  background-color: #f8fafc;
+}
+
+@media print {
+  body {
+    background-color: #fff;
+  }
+}

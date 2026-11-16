@@ -144,7 +144,7 @@ export default function ScriptBuilderPage() {
           await updateDoc(doc(db, `accounts/${currentAccountId}/scripts`, currentId), payload);
         }
         setSaveStatus('Saved');
-      } catch (e) { setSaveStatus('Unsaved'); }
+      } catch { setSaveStatus('Unsaved'); }
     }, 1200);
     return () => clearTimeout(timer);
   }, [name, description, steps, currentId, isInitialLoad, currentAccountId]);
@@ -635,7 +635,7 @@ export default function ScriptBuilderPage() {
                 </div>
                 <div className="modal-body">
                   <div style={{fontSize: '13px', color: 'var(--ink-soft)', marginBottom: '12px'}}>
-                    Paste text from anywhere. We'll automatically split numbered lists, plain lines, or tab-separated spreadsheet cells into distinct steps.
+                    Paste text from anywhere. We&apos;ll automatically split numbered lists, plain lines, or tab-separated spreadsheet cells into distinct steps.
                   </div>
                   <textarea 
                     className="bulk-textarea" 
@@ -672,7 +672,7 @@ export default function ScriptBuilderPage() {
                     <div className="figma-paste-zone">
                       <div className="fp-icon">🎨</div>
                       <h4 className="fp-title">Paste a Figma link</h4>
-                      <p className="fp-sub">We'll scan the file and fetch your top-level frames so you can pick which ones to test.</p>
+                      <p className="fp-sub">We&apos;ll scan the file and fetch your top-level frames so you can pick which ones to test.</p>
                       <div className="fp-input-row">
                         <input 
                           type="text" 

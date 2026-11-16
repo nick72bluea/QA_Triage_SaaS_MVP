@@ -708,7 +708,7 @@ export default function TesterExecutionEngine() {
   // Testing & Timer State
   const [currentIdx, setCurrentIdx] = useState(0);
   const [liveIdx, setLiveIdx] = useState(0);
-  const [sessionStartTime, setSessionStartTime] = useState(Date.now());
+  const [sessionStartTime, setSessionStartTime] = useState(() => Date.now());
   const [cumulativeTimeMs, setCumulativeTimeMs] = useState(0);
   const cumulativeTimeRef = useRef(0);
   const sessionStartRef = useRef(Date.now());
@@ -724,7 +724,7 @@ export default function TesterExecutionEngine() {
   const [passChips, setPassChips] = useState<string[]>([]);
   const [passNotes, setPassNotes] = useState('');
   const [passMediaUrls, setPassMediaUrls] = useState<string[]>([]);
-  const [isPassQuietFlash, setIsPassQuietFlash] = useState(false);
+  const [, setIsPassQuietFlash] = useState(false);
 
   const [failPanelOpen, setFailPanelOpen] = useState(false);
   const [failChips, setFailChips] = useState<string[]>([]);
@@ -742,7 +742,7 @@ export default function TesterExecutionEngine() {
 
   // --- Messages State ---
   const [messages, setMessages] = useState<TesterMessage[]>([]);
-  const [messagesLoaded, setMessagesLoaded] = useState(false);
+  const [, setMessagesLoaded] = useState(false);
   const [inboxOpen, setInboxOpen] = useState(false);
   const [openMessageId, setOpenMessageId] = useState<string | null>(null);
   const [stepCalloutReplyOpen, setStepCalloutReplyOpen] = useState(false);
@@ -902,7 +902,7 @@ export default function TesterExecutionEngine() {
     });
 
     return () => unsubscribe();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [runId]);
 
   // 7. Cleanup Toast Timer
@@ -996,7 +996,7 @@ export default function TesterExecutionEngine() {
 
     try {
       await Promise.all(unread.map(m => updateDoc(doc(db, 'testRuns', runId, 'messages', m.id), { readByTester: true })));
-    } catch (err) {
+    } catch {
       setMessages(prev => prev.map(m => unread.some(u => u.id === m.id) ? { ...m, readByTester: false } : m));
     }
   };
@@ -1545,7 +1545,7 @@ export default function TesterExecutionEngine() {
                   {isResuming && (
                     <div style={{ fontSize: '13px', color: 'var(--ink-mute)', marginBottom: '20px', lineHeight: '1.45', background: 'rgba(255,255,255,0.03)', padding: '12px 14px', borderRadius: '8px', border: '1px solid var(--line)' }}>
                       <strong style={{color: 'var(--amber)', display: 'block', marginBottom: '4px'}}>Device locked</strong>
-                      Testing on a phone but typing notes here? We've locked your device settings to the ones you started with so the PM gets accurate bug reports.
+                      Testing on a phone but typing notes here? We&apos;ve locked your device settings to the ones you started with so the PM gets accurate bug reports.
                     </div>
                   )}
 

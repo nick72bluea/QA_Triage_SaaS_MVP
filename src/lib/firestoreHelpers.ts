@@ -2,16 +2,6 @@ import { doc, deleteDoc, updateDoc, type DocumentData, type UpdateData } from 'f
 import { db } from './firebase';
 
 /**
- * Get a typed document reference, asserting that the id is defined.
- * Throws at call-time (not Firestore-time) if id is missing, which gives
- * a clearer stack trace than the deep Firestore error.
- */
-function runDoc(runId: string | undefined) {
-  if (!runId) throw new Error('runDoc called with undefined id — caller should filter first');
-  return doc(db, 'testRuns', runId);
-}
-
-/**
  * Delete a testRun doc safely. No-ops if id is undefined.
  */
 export async function deleteRunSafe(runId: string | undefined): Promise<void> {

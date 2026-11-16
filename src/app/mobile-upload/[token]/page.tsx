@@ -240,7 +240,7 @@ export default function MobileUploadPage() {
               <div className="spinner"></div>
             </div>
             <h1 className="title">Uploading...</h1>
-            <p className="sub">Sending your file securely to the desktop. Please don't close this page.</p>
+            <p className="sub">Sending your file securely to the desktop. Please don&apos;t close this page.</p>
           </>
         ) : (
           <>

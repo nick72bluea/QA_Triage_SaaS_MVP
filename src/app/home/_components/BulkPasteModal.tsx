@@ -85,7 +85,7 @@ export function BulkPasteModal({ open, onClose, onConfirm, insertAfterStep }: Bu
   const [text, setText] = useState('');
   const [format, setFormat] = useState<BulkPasteFormat>('numbered');
   const [parsed, setParsed] = useState<ParsedStep[]>([]);
-  const [autoDetectedFormat, setAutoDetectedFormat] = useState<BulkPasteFormat | null>(null);
+  const [, setAutoDetectedFormat] = useState<BulkPasteFormat | null>(null);
 
   // Auto-detect format on text change
   useEffect(() => {

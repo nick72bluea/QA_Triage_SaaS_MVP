@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo } from "react";
 import { useWorkspaceSettings } from "@/hooks/useWorkspaceSettings";
-import { ThemeMode, CornerStyle, SidebarStyle, FontPairing, BrandingSnapshot } from "@/types/workspace";
+import { CornerStyle, SidebarStyle, FontPairing, BrandingSnapshot } from "@/types/workspace";
 
 // BrandingProvider — applies workspace branding to the live document.
 //

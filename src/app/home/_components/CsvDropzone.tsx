@@ -67,7 +67,7 @@ export function CsvDropzone({ file, headers, rawData, onUpload, onReset, onChang
                 </svg>
               </div>
               <div className="dz-title">Drop your test script here</div>
-              <div className="dz-sub">We'll preview the file and map columns on the next step.</div>
+              <div className="dz-sub">We&apos;ll preview the file and map columns on the next step.</div>
               <button className="btn btn-primary" onClick={() => fileInputRef.current?.click()}>Browse Files</button>
               <input type="file" accept=".csv,.tsv" hidden ref={fileInputRef} onChange={handleFileChange} />
               <div className="dz-hint">CSV, TSV · max 10 MB · 1,000 tests supported</div>

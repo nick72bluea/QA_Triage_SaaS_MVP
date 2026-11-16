@@ -6,7 +6,6 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { TestRunData, TestStep, TestResult } from '@/types';
-import { useRouter } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
 import { PageHead } from '@/components/PageHead';
 import { useWorkspaceSettings } from '@/hooks/useWorkspaceSettings';
@@ -16,7 +15,6 @@ import { deleteRunSafe, updateRunsBatch } from '@/lib/firestoreHelpers';
 // ─── Sidebar is NOT imported here — it lives in layout.tsx ───
 
 type ViewState = 'LIST' | 'DETAIL';
-type ExtendedTestResult = TestResult;
 
 const getMediaType = (url: string) => {
   if (url.toLowerCase().match(/\.(mp4|webm|ogg|mov)(?=\?|$)/i)) return 'video';
@@ -363,7 +361,6 @@ const AdminStyles = React.memo(() => (
 AdminStyles.displayName = 'AdminStyles';
 
 export default function AdminPage() {
-  const router = useRouter();
   const { currentAccountId } = useAuth();
   const { settings: workspaceSettings } = useWorkspaceSettings();
 

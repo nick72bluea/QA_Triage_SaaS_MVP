@@ -211,7 +211,7 @@ GlobalSettingsStyles.displayName = "GlobalSettingsStyles";
 
 export default function WorkspaceSettingsPage() {
   const { settings, loading, save, accountId } = useWorkspaceSettings();
-  const { user, currentAccountId, currentRole, profile, fullSignOut, canManage } = useAuth();
+  const { user, currentAccountId, currentRole, fullSignOut, canManage } = useAuth();
 
   const [formData, setFormData] = useState<WorkspaceSettings | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -1038,7 +1038,7 @@ export default function WorkspaceSettingsPage() {
                 <div className="danger-row">
                   <div>
                     <div className="danger-label">Leave workspace</div>
-                    <div className="danger-desc">You'll lose access immediately. An owner can re-invite you.</div>
+                    <div className="danger-desc">You&apos;ll lose access immediately. An owner can re-invite you.</div>
                   </div>
                   <button
                     className="btn-danger"

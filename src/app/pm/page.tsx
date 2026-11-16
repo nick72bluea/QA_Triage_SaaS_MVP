@@ -8,7 +8,7 @@ import { db, storage } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { TestResult, TestRunData, ProjectAggregate, AggregatedStep, TesterResultOnStep, TesterMessage, MessageThread, AIDraftedTicket, REFINEMENT_CHIPS, PendingTriageAction, PriorityPopoverState, JiraDraftingModalState, ContactModalState } from '@/types';
 import { groupRunsByProject, aggregateProject, aggregateProjectByPlatform, colorForTester, initialsFor } from '@/lib/triageAggregation';
-import { getProjectPlatforms, projectHasPlatforms } from '@/lib/platforms';
+import { getProjectPlatforms } from '@/lib/platforms';
 import { streamDrafts, refineDraft } from '@/lib/draft-client';
 import { authFetch } from '@/lib/api-client';
 import { formatRelative } from '@/lib/format';
@@ -142,7 +142,7 @@ export default function PMTriageDashboard() {
   const [uploadingStep, setUploadingStep] = useState<string | null>(null);
 
   const [allMessages, setAllMessages] = useState<TesterMessage[]>([]);
-  const [messagesLoaded, setMessagesLoaded] = useState(false);
+  const [, setMessagesLoaded] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterProject, setFilterProject] = useState<string>('All projects');
@@ -357,7 +357,7 @@ export default function PMTriageDashboard() {
       await Promise.all(unreadReplies.map(r =>
         updateDoc(doc(db, 'testRuns', r.runId, 'messages', r.id), { readByPm: true })
       ));
-    } catch (err) {
+    } catch {
       setAllMessages(prev => prev.map(m => {
         if (unreadReplies.some(r => r.id === m.id)) return { ...m, readByPm: false };
         return m;
@@ -419,9 +419,6 @@ export default function PMTriageDashboard() {
     });
   };
 
-  const toggleSelection = (key: string) => {
-    setSelectedBugs(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
-  };
 
   const bulkSnooze = () => {
     const next = { ...pendingTriage };
@@ -466,7 +463,7 @@ export default function PMTriageDashboard() {
           });
         })
       );
-    } catch (error) {
+    } catch {
       alert('Save failed — please try again.');
     } finally {
       setDraftingModal(prev => ({ ...prev, pushing: false }));
@@ -476,7 +473,7 @@ export default function PMTriageDashboard() {
   // 8a: Update Jira open drafting modal
   const openDraftingModal = async () => {
     if (blockIfViewOnly()) return;
-    const ticketed = Object.entries(pendingTriage).filter(([_, p]) => p.action === 'Ticketed');
+    const ticketed = Object.entries(pendingTriage).filter(([, p]) => p.action === 'Ticketed');
     if (ticketed.length === 0) return;
 
     const tickets = ticketed.map(([reviewKey, action]) => {
@@ -798,7 +795,7 @@ export default function PMTriageDashboard() {
       await uploadBytes(storageRef, file);
       const downloadURL = await getDownloadURL(storageRef);
       await updateDoc(doc(db, 'testRuns', runId), { [`results.${stepId}.evidenceUrls`]: [...(currentResult?.evidenceUrls || []), downloadURL] });
-    } catch (error) { alert("Failed to attach file."); } finally { setUploadingStep(null); }
+    } catch { alert("Failed to attach file."); } finally { setUploadingStep(null); }
   };
 
   const openPMQrScanner = (runId: string, stepId: string, currentResult: ExtendedTestResult | undefined) => {
@@ -816,7 +813,7 @@ export default function PMTriageDashboard() {
     const docRef = doc(db, 'mobileUploads', uploadToken);
     const unsubscribe = onSnapshot(docRef, async (docSnap) => {
       if (docSnap.exists() && docSnap.data().url) {
-        try { await updateDoc(doc(db, 'testRuns', qrTarget.runId), { [`results.${qrTarget.stepId}.evidenceUrls`]: [...(qrTarget.currentResult?.evidenceUrls || []), docSnap.data().url] }); } catch (err) {}
+        try { await updateDoc(doc(db, 'testRuns', qrTarget.runId), { [`results.${qrTarget.stepId}.evidenceUrls`]: [...(qrTarget.currentResult?.evidenceUrls || []), docSnap.data().url] }); } catch {}
         deleteDoc(docRef).catch(console.error); setQrModalOpen(false); setQrTarget(null);
       }
     });
@@ -905,7 +902,7 @@ export default function PMTriageDashboard() {
         });
       }
       setContactModal(null);
-    } catch (error) {
+    } catch {
       alert('Failed to send. Please try again.');
     } finally {
       setIsSendingMessage(false);
@@ -972,9 +969,9 @@ export default function PMTriageDashboard() {
   }, [testRuns, filterProject, filterCycle, filterTester, searchQuery]);
 
   const stats = useMemo(() => {
-    let projectsCount = new Set(filteredRuns.map(r => r.projectName)).size;
-    let inProgressProjects = new Set(filteredRuns.filter(r => !r.isCompleted).map(r => r.projectName)).size;
-    let completeProjects = new Set(filteredRuns.filter(r => r.isCompleted).map(r => r.projectName)).size;
+    const projectsCount = new Set(filteredRuns.map(r => r.projectName)).size;
+    const inProgressProjects = new Set(filteredRuns.filter(r => !r.isCompleted).map(r => r.projectName)).size;
+    const completeProjects = new Set(filteredRuns.filter(r => r.isCompleted).map(r => r.projectName)).size;
     
     let totalSteps = 0, completedSteps = 0, passed = 0, failed = 0, pendingTriage = 0;
     filteredRuns.forEach(run => {
@@ -2592,7 +2589,7 @@ export default function PMTriageDashboard() {
               <div className="qr-corner tl"></div><div className="qr-corner tr"></div><div className="qr-corner bl"></div>
             </div>
             <div className="qr-instructions">
-              <div className="qr-step-item"><div className="qr-step-num">1</div><div>Open your phone's camera and point it at the code</div></div>
+              <div className="qr-step-item"><div className="qr-step-num">1</div><div>Open your phone&apos;s camera and point it at the code</div></div>
               <div className="qr-step-item"><div className="qr-step-num">2</div><div>Tap the notification to open the upload page</div></div>
               <div className="qr-step-item"><div className="qr-step-num">3</div><div>Take photos or videos — they attach here automatically</div></div>
             </div>
