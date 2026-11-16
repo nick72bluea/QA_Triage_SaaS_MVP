@@ -28,7 +28,10 @@ export interface WorkspaceSettings {
   // ─── INTEGRATIONS ──────────────────────────────────────────────────────
   jiraUrl: string;
   jiraEmail: string;
+  // jiraToken / aiToken are form-only: they're sent to /api/workspace/secrets
+  // and stored server-side. The settings doc only holds the *Set flags.
   jiraToken: string;
+  jiraTokenSet?: boolean;
   jiraProjectKey: string;  // e.g. "QA" or "UAT" — the Jira project tickets are created in
   slackConnected: boolean;
   slackChannel: string;
@@ -40,6 +43,7 @@ export interface WorkspaceSettings {
   // ─── AI CONFIG ─────────────────────────────────────────────────────────
   aiProvider: string;
   aiToken: string;
+  aiTokenSet?: boolean;
   maxSpend: string;
 
   // ─── NOTIFICATIONS ─────────────────────────────────────────────────────

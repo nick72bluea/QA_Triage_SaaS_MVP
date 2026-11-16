@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams } from 'next/navigation';
-import { doc, updateDoc, onSnapshot, serverTimestamp, collection, query, where, orderBy, addDoc } from 'firebase/firestore';
+import { doc, updateDoc, onSnapshot, serverTimestamp, collection, query, orderBy, addDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '@/lib/firebase';
 import { TestRunData, TestStep, TestResult, TesterMessage, MessageThread } from '@/types';
@@ -874,8 +874,7 @@ export default function TesterExecutionEngine() {
   useEffect(() => {
     if (!runId) return;
     const q = query(
-      collection(db, 'testerMessages'),
-      where('runId', '==', runId),
+      collection(db, 'testRuns', runId, 'messages'),
       orderBy('createdAt', 'desc')
     );
 
@@ -996,7 +995,7 @@ export default function TesterExecutionEngine() {
     setMessages(prev => prev.map(m => unread.some(u => u.id === m.id) ? { ...m, readByTester: true } : m));
 
     try {
-      await Promise.all(unread.map(m => updateDoc(doc(db, 'testerMessages', m.id), { readByTester: true })));
+      await Promise.all(unread.map(m => updateDoc(doc(db, 'testRuns', runId, 'messages', m.id), { readByTester: true })));
     } catch (err) {
       setMessages(prev => prev.map(m => unread.some(u => u.id === m.id) ? { ...m, readByTester: false } : m));
     }
@@ -1006,7 +1005,9 @@ export default function TesterExecutionEngine() {
     if (!replyDraft.trim() || sendingReply || !runData) return;
     setSendingReply(true);
     try {
-      await addDoc(collection(db, 'testerMessages'), {
+      await addDoc(collection(db, 'testRuns', runId, 'messages'), {
+        // accountId lets the PM's inbox find this reply (it was missing before).
+        accountId: runData.accountId ?? null,
         runId: parentMessage.runId,
         projectName: parentMessage.projectName,
         testCycle: parentMessage.testCycle || null,
@@ -1025,7 +1026,7 @@ export default function TesterExecutionEngine() {
         hasReply: false,
       });
 
-      await updateDoc(doc(db, 'testerMessages', parentMessage.id), {
+      await updateDoc(doc(db, 'testRuns', runId, 'messages', parentMessage.id), {
         hasReply: true,
       });
 
@@ -1257,7 +1258,7 @@ export default function TesterExecutionEngine() {
   };
 
   const openQrScanner = (target: 'pass' | 'fail') => {
-    const token = Math.random().toString(36).substring(2, 15);
+    const token = crypto.randomUUID();
     setUploadToken(token);
     setQrTargetPanel(target);
     

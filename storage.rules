@@ -1,0 +1,55 @@
+rules_version = '2';
+
+// Proofdeck Cloud Storage rules.
+// Files are shown in the app via download URLs (which carry their own access
+// token), so `get` here only matters for the uploader fetching that URL.
+// Nobody may list folders.
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isEvidence() {
+      return request.resource.size < 50 * 1024 * 1024
+        && (request.resource.contentType.matches('image/.*')
+            || request.resource.contentType.matches('video/.*'));
+    }
+
+    function isImage(maxMb) {
+      return request.resource.size < maxMb * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // Testers (no account) uploading evidence, and phone uploads via QR code.
+    match /tester_evidence/{file} {
+      allow get: if true;
+      allow create: if isEvidence();
+    }
+    match /mobile_evidence/{file} {
+      allow get: if true;
+      allow create: if isEvidence();
+    }
+
+    // Uploads made from inside the app by signed-in workspace users.
+    match /pm_evidence/{file} {
+      allow get: if signedIn();
+      allow create: if signedIn() && isEvidence();
+    }
+    match /admin_media/{file} {
+      allow get: if signedIn();
+      allow create: if signedIn() && isEvidence();
+    }
+
+    // Workspace logos.
+    match /accounts/{accountId}/branding/{file} {
+      allow get: if true;
+      allow create: if signedIn() && isImage(5);
+      allow delete: if signedIn();
+    }
+
+    // Everything else: denied.
+  }
+}

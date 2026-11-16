@@ -42,6 +42,7 @@ export interface DeviceInfo {
 
 export interface TestRunData {
   id?: string;
+  accountId?: string; // workspace that owns this run (tenancy)
   projectName: string;
   testerName: string;
   testerEmail?: string;
@@ -118,8 +119,10 @@ export interface ProjectAggregate {
   steps: AggregatedStep[];
 }
 
+// Stored at testRuns/{runId}/messages/{id}
 export interface TesterMessage {
   id: string;
+  accountId?: string | null;
   runId: string;
   projectName: string;
   testCycle?: string;

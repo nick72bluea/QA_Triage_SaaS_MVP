@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { doc, getDoc, collection, addDoc, updateDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
+import { authFetch } from '@/lib/api-client';
 
 // --- Local Types ---
 interface ScriptStep {
@@ -194,10 +195,9 @@ export default function ScriptBuilderPage() {
     const targetFrames = figmaFrames.filter(f => selectedFrames.includes(f.id));
 
     try {
-      const res = await fetch('/api/ai/generate-steps', {
+      const res = await authFetch('/api/ai/generate_steps', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ frames: targetFrames, scriptName: name, description }),
+        body: JSON.stringify({ frames: targetFrames, scriptName: name, description, accountId: currentAccountId }),
         signal: abortControllerRef.current.signal
       });
 
@@ -259,10 +259,9 @@ export default function ScriptBuilderPage() {
     if (!refineText.trim()) return;
     try {
       setRefiningStepId(step.id);
-      const res = await fetch('/api/ai/refine-step', {
+      const res = await authFetch('/api/ai/refine-step', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ step, instruction: refineText })
+        body: JSON.stringify({ step, instruction: refineText, accountId: currentAccountId })
       });
       const data = await res.json();
       setAiSteps(prev => prev.map(s => s.id === step.id ? data.step : s));

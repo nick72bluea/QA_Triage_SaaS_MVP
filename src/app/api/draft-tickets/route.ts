@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { requireMember, errorResponse } from '@/lib/server-auth';
+import { getAccountSecrets } from '@/lib/secrets';
 
 // NOTE: This route runs in the Node.js runtime (not edge) so it can call Firestore
 // to resolve the per-workspace Anthropic API key before streaming.
@@ -26,22 +26,27 @@ interface InboundTicket {
 }
 
 export async function POST(req: Request) {
-  const body = await req.json() as { tickets: InboundTicket[]; accountId?: string };
+  const body = await req.json() as { tickets: InboundTicket[]; accountId: string };
   const { tickets, accountId } = body;
+
+  if (!Array.isArray(tickets) || tickets.length === 0 || tickets.length > 50) {
+    return NextResponse.json({ error: 'Send between 1 and 50 tickets.' }, { status: 400 });
+  }
+
+  // Only signed-in members of this workspace may spend its AI credits.
+  try {
+    await requireMember(req, accountId, 'member');
+  } catch (err) {
+    return errorResponse(err);
+  }
 
   // Resolve API key: prefer per-workspace key, fall back to server env var
   let apiKey = process.env.ANTHROPIC_API_KEY || '';
-
-  if (accountId) {
-    try {
-      const settingsSnap = await getDoc(doc(db, 'accounts', accountId, 'settings', 'workspace'));
-      if (settingsSnap.exists()) {
-        const workspaceKey = settingsSnap.data()?.aiToken;
-        if (workspaceKey) apiKey = workspaceKey;
-      }
-    } catch (err) {
-      console.warn('Could not load workspace aiToken — using server env key', err);
-    }
+  try {
+    const { aiToken } = await getAccountSecrets(accountId);
+    if (aiToken) apiKey = aiToken;
+  } catch (err) {
+    console.warn('Could not load workspace aiToken — using server env key', err);
   }
 
   if (!apiKey) {

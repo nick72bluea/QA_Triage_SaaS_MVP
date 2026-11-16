@@ -1,23 +1,24 @@
 import { NextResponse } from 'next/server';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { requireMember, errorResponse } from '@/lib/server-auth';
+import { getAccountSecrets } from '@/lib/secrets';
 
 export async function POST(req: Request) {
   const { draft, refinement, accountId } = await req.json();
 
+  // Only signed-in members of this workspace may spend its AI credits.
+  try {
+    await requireMember(req, accountId, 'member');
+  } catch (err) {
+    return errorResponse(err);
+  }
+
   // Resolve API key: prefer per-workspace key, fall back to server env var
   let apiKey = process.env.ANTHROPIC_API_KEY || '';
-
-  if (accountId) {
-    try {
-      const settingsSnap = await getDoc(doc(db, 'accounts', accountId, 'settings', 'workspace'));
-      if (settingsSnap.exists()) {
-        const workspaceKey = settingsSnap.data()?.aiToken;
-        if (workspaceKey) apiKey = workspaceKey;
-      }
-    } catch (err) {
-      console.warn('Could not load workspace aiToken — using server env key', err);
-    }
+  try {
+    const { aiToken } = await getAccountSecrets(accountId);
+    if (aiToken) apiKey = aiToken;
+  } catch (err) {
+    console.warn('Could not load workspace aiToken — using server env key', err);
   }
 
   if (!apiKey) {

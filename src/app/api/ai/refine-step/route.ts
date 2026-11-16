@@ -1,8 +1,23 @@
 import { NextResponse } from 'next/server';
+import { requireMember, errorResponse } from '@/lib/server-auth';
+import { getAccountSecrets } from '@/lib/secrets';
 
 export async function POST(req: Request) {
-  const { step, instruction } = await req.json();
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const { step, instruction, accountId } = await req.json();
+
+  try {
+    await requireMember(req, accountId, 'member');
+  } catch (err) {
+    return errorResponse(err);
+  }
+
+  let apiKey = process.env.ANTHROPIC_API_KEY || '';
+  try {
+    const { aiToken } = await getAccountSecrets(accountId);
+    if (aiToken) apiKey = aiToken;
+  } catch (err) {
+    console.warn('Could not load workspace aiToken — using server env key', err);
+  }
 
   if (!apiKey) return NextResponse.json({ error: 'Missing API Key' }, { status: 500 });
 
@@ -27,7 +42,7 @@ export async function POST(req: Request) {
     const refinedStep = JSON.parse(refinedText.match(/\{[\s\S]*\}/)[0]);
 
     return NextResponse.json({ step: { ...step, ...refinedStep } });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    return errorResponse(error);
   }
 }

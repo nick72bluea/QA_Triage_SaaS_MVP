@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { adminDb } from '@/lib/firebase-admin';
+import { requireMember, errorResponse } from '@/lib/server-auth';
+import { getAccountSecrets } from '@/lib/secrets';
 
 // ─── Atlassian Document Format helpers ───────────────────────────────────────
 // Jira API v3 requires ADF for rich description fields.
@@ -181,26 +182,20 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { tickets, accountId } = body as { tickets: AIDraftedTicket[]; accountId: string };
 
-    if (!tickets || !Array.isArray(tickets) || tickets.length === 0) {
+    if (!Array.isArray(tickets) || tickets.length === 0 || tickets.length > 50) {
       return NextResponse.json({ error: 'No tickets provided.' }, { status: 400 });
     }
-    if (!accountId) {
-      return NextResponse.json({ error: 'Missing accountId.' }, { status: 400 });
+    // Only signed-in members (not viewers) of this workspace may push tickets.
+    await requireMember(request, accountId, 'member');
+
+    // Load workspace Jira settings (non-secret) and the API token (secret)
+    const settingsSnap = await adminDb().doc(`accounts/${accountId}/settings/workspace`).get();
+    if (!settingsSnap.exists) {
+      return NextResponse.json({ error: 'Workspace settings not found.' }, { status: 400 });
     }
 
-    // Load workspace Jira settings from Firestore
-    const settingsRef = doc(db, 'accounts', accountId, 'settings', 'workspace');
-    const settingsSnap = await getDoc(settingsRef);
-
-    if (!settingsSnap.exists()) {
-      return NextResponse.json(
-        { error: 'Workspace settings not found.' },
-        { status: 400 }
-      );
-    }
-
-    const settings = settingsSnap.data();
-    const { jiraUrl, jiraEmail, jiraToken, jiraProjectKey } = settings;
+    const { jiraUrl, jiraEmail, jiraProjectKey } = settingsSnap.data() || {};
+    const { jiraToken } = await getAccountSecrets(accountId);
 
     if (!jiraUrl || !jiraEmail || !jiraToken || !jiraProjectKey) {
       return NextResponse.json(
@@ -209,8 +204,15 @@ export async function POST(request: Request) {
       );
     }
 
-    // Normalise the domain — strip https:// if the user pasted the full URL
-    const domain = jiraUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    // Only ever talk to Atlassian Cloud — stops the saved URL being used to
+    // send the token to an arbitrary server.
+    const domain = String(jiraUrl).replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+    if (!/^[a-z0-9-]+\.atlassian\.net$/i.test(domain)) {
+      return NextResponse.json(
+        { error: 'Jira URL must be an Atlassian Cloud address like yourteam.atlassian.net.' },
+        { status: 400 }
+      );
+    }
     const authHeader = `Basic ${Buffer.from(`${jiraEmail}:${jiraToken}`).toString('base64')}`;
 
     const results: { id: string; success: boolean; jiraKey?: string; jiraUrl?: string; error?: string }[] = [];
@@ -287,8 +289,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ results });
-  } catch (error: any) {
-    console.error('push-to-jira error:', error);
-    return NextResponse.json({ error: 'Internal server error.' }, { status: 500 });
+  } catch (error) {
+    return errorResponse(error);
   }
 }

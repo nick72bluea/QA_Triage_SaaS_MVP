@@ -621,7 +621,7 @@ export default function AdminPage() {
 
   const openAdminQrScanner = (stepIndex: number) => {
     setQrTesterName('');
-    const token = Math.random().toString(36).substring(2, 15);
+    const token = crypto.randomUUID();
     setUploadToken(token);
     setQrStepContext(stepIndex);
     setUploadUrl(`${window.location.origin}/mobile-upload/${token}`);

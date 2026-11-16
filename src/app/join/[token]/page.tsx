@@ -1,15 +1,9 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import {
-  doc,
-  getDoc,
-  setDoc,
-  serverTimestamp,
-} from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { useParams } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
+import { authFetch } from "@/lib/api-client";
 
 type JoinState =
   | "loading"
@@ -22,12 +16,10 @@ type JoinState =
 
 export default function JoinPage() {
   const { token } = useParams<{ token: string }>();
-  const router = useRouter();
-  const { user, loading: authLoading, refreshProfile } = useAuth();
+  const { user, loading: authLoading } = useAuth();
 
   const [state, setState] = useState<JoinState>("loading");
   const [workspaceName, setWorkspaceName] = useState("");
-  const [joining, setJoining] = useState(false);
 
   // Resolve the invite and (if authed) auto-join
   useEffect(() => {
@@ -35,45 +27,32 @@ export default function JoinPage() {
 
     const resolve = async () => {
       try {
-        const inviteSnap = await getDoc(doc(db, "invites", token));
-        if (!inviteSnap.exists()) { setState("invalid"); return; }
-
-        const invite = inviteSnap.data();
-        if (invite.expiresAt < Date.now()) { setState("expired"); return; }
-
-        setWorkspaceName(invite.accountName || "the workspace");
+        // 1. Public lookup — which workspace is this invite for?
+        const preview = await fetch(`/api/invites/preview?token=${encodeURIComponent(token)}`).then((r) => r.json());
+        if (preview.status !== "valid") { setState(preview.status === "expired" ? "expired" : "invalid"); return; }
+        setWorkspaceName(preview.accountName);
 
         if (!user) { setState("needs_login"); return; }
 
-        // Check if already a member
-        const memberSnap = await getDoc(doc(db, "accountMembers", `${invite.accountId}_${user.uid}`));
-        if (memberSnap.exists()) { setState("already_member"); return; }
-
-        setState("loading");
-        setJoining(true);
-        await setDoc(doc(db, "accountMembers", `${invite.accountId}_${user.uid}`), {
-          accountId: invite.accountId,
-          uid: user.uid,
-          email: user.email,
-          displayName: user.displayName || user.email?.split("@")[0] || "Member",
-          role: "member",
-          joinedAt: serverTimestamp(),
-        });
-        // Update lastAccountId so they land in the right workspace
-        await setDoc(doc(db, "users", user.uid), { lastAccountId: invite.accountId }, { merge: true });
-        await refreshProfile();
-        setState("joined");
-        setTimeout(() => router.replace("/home"), 2000);
+        // 2. Signed in — the server checks the invite and adds the membership.
+        const res = await authFetch("/api/invites/accept", { method: "POST", body: JSON.stringify({ token }) });
+        const result = await res.json();
+        if (result.status === "joined" || result.status === "already_member") {
+          setState(result.status);
+          // Full reload so the app picks up the new workspace membership.
+          if (result.status === "joined") setTimeout(() => window.location.assign("/home"), 2000);
+        } else if (result.status === "expired" || result.status === "invalid") {
+          setState(result.status);
+        } else {
+          setState("error");
+        }
       } catch (err) {
         console.error("Join error:", err);
         setState("error");
-      } finally {
-        setJoining(false);
       }
     };
 
     resolve();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, user, token]);
 
   const messages: Record<JoinState, { title: string; body: string; cta?: { label: string; href: string } }> = {

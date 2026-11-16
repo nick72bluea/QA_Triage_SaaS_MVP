@@ -1,0 +1,217 @@
+rules_version = '2';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Proofdeck Firestore security rules
+//
+// Model:
+//   accounts/{accountId}                     a workspace
+//   accountMembers/{accountId}_{uid}         membership + role (owner/admin/member/viewer)
+//   testRuns/{runId}                         owned by a workspace via `accountId`
+//   testRuns/{runId}/messages/{id}           PM ⇄ tester messages
+//
+// Testers have no account. They can only reach a run by knowing its random ID
+// (the link we send them), and can only change the fields a tester needs.
+//
+// Secrets (Jira token, AI key) live at accounts/{id}/private/* and are never
+// readable from the browser — only the server (Admin SDK) can touch them.
+//
+// Super users are marked with a custom auth claim { superUser: true }, set by
+// scripts/set-super-user.mjs. They can read and write every workspace.
+// ─────────────────────────────────────────────────────────────────────────────
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── Helpers ────────────────────────────────────────────────────────────
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isSuper() {
+      return signedIn() && request.auth.token.superUser == true;
+    }
+
+    function memberPath(accountId) {
+      return /databases/$(database)/documents/accountMembers/$(accountId + '_' + request.auth.uid);
+    }
+
+    // True if the caller holds one of `roles` in `accountId`.
+    function hasRole(accountId, roles) {
+      return isSuper() || (
+        signedIn()
+        && accountId is string
+        && exists(memberPath(accountId))
+        && get(memberPath(accountId)).data.role in roles
+      );
+    }
+
+    function isMember(accountId) { return hasRole(accountId, ['owner', 'admin', 'member', 'viewer']); }
+    function canEdit(accountId)  { return hasRole(accountId, ['owner', 'admin', 'member']); }
+    function isAdmin(accountId)  { return hasRole(accountId, ['owner', 'admin']); }
+    function isOwner(accountId)  { return hasRole(accountId, ['owner']); }
+
+    function accountOwnerId(accountId) {
+      return get(/databases/$(database)/documents/accounts/$(accountId)).data.ownerId;
+    }
+
+    function onlyChanges(fields) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
+    }
+
+    // ─── Users ──────────────────────────────────────────────────────────────
+
+    match /users/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+      allow read: if isSuper();
+    }
+
+    // ─── Workspaces ─────────────────────────────────────────────────────────
+
+    match /accounts/{accountId} {
+      allow read: if isMember(accountId)
+                  || (signedIn() && resource.data.ownerId == request.auth.uid);
+      // Anyone signed in can start a new workspace they own.
+      allow create: if signedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow update: if isAdmin(accountId)
+                    && request.resource.data.ownerId == resource.data.ownerId;
+      allow delete: if isOwner(accountId);
+
+      // Workspace settings (branding, Jira URL/email, notifications).
+      // Secrets are NOT allowed in here — they go through /api/workspace/secrets.
+      match /settings/{docId} {
+        allow read: if isMember(accountId);
+        allow create: if (isMember(accountId) || (signedIn() && accountOwnerId(accountId) == request.auth.uid))
+                      && !request.resource.data.keys().hasAny(['jiraToken', 'aiToken']);
+        allow update: if isAdmin(accountId)
+                      && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['jiraToken', 'aiToken']);
+        allow delete: if isOwner(accountId);
+      }
+
+      match /scripts/{scriptId} {
+        allow read: if isMember(accountId);
+        allow write: if canEdit(accountId);
+      }
+
+      match /integrations/{docId} {
+        allow read: if isMember(accountId);
+        allow write: if isAdmin(accountId);
+      }
+
+      // Server-only. No browser access at all.
+      match /private/{docId} {
+        allow read, write: if false;
+      }
+    }
+
+    // ─── Memberships ────────────────────────────────────────────────────────
+    // Doc ID is `${accountId}_${uid}`. Joining via invite happens on the server
+    // (/api/invites/accept), so the browser can only create the OWNER
+    // membership of a workspace it has just created.
+
+    match /accountMembers/{memberId} {
+      allow read: if signedIn() && (
+        resource.data.uid == request.auth.uid || isMember(resource.data.accountId)
+      );
+
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && memberId == request.resource.data.accountId + '_' + request.auth.uid
+        && request.resource.data.role == 'owner'
+        && accountOwnerId(request.resource.data.accountId) == request.auth.uid;
+
+      // Admins can change roles of non-owners, but can't create owners.
+      allow update: if isAdmin(resource.data.accountId)
+        && resource.data.role != 'owner'
+        && request.resource.data.role in ['admin', 'member', 'viewer']
+        && onlyChanges(['role']);
+
+      // Admins can remove non-owners; anyone can leave; owners can remove anyone
+      // (needed when deleting a workspace).
+      allow delete: if signedIn() && (
+        resource.data.uid == request.auth.uid
+        || isOwner(resource.data.accountId)
+        || (isAdmin(resource.data.accountId) && resource.data.role != 'owner')
+      );
+    }
+
+    // ─── Invites ────────────────────────────────────────────────────────────
+    // Looked up and accepted on the server; only admins manage them here.
+
+    match /invites/{token} {
+      allow read: if isAdmin(resource.data.accountId);
+      allow create: if isAdmin(request.resource.data.accountId)
+        && request.resource.data.token == token
+        && token.size() >= 32
+        && request.resource.data.role in ['admin', 'member', 'viewer'];
+      allow delete: if isAdmin(resource.data.accountId);
+    }
+
+    // ─── Test runs ──────────────────────────────────────────────────────────
+
+    // The only fields a tester (no account) may change on their run.
+    function testerUpdate() {
+      return onlyChanges(['results', 'cumulativeTimeMs', 'deviceInfo', 'isCompleted', 'completedAt'])
+        && request.resource.data.accountId == resource.data.accountId;
+    }
+
+    match /testRuns/{runId} {
+      // `get` is open: the run ID in the tester's link is the secret.
+      // `list` is members-only, so nobody can enumerate runs.
+      allow get: if true;
+      allow list: if isMember(resource.data.accountId);
+
+      allow create: if canEdit(request.resource.data.accountId);
+      allow update: if (canEdit(resource.data.accountId)
+                         && request.resource.data.accountId == resource.data.accountId)
+                    || testerUpdate();
+      allow delete: if canEdit(resource.data.accountId);
+
+      match /messages/{messageId} {
+        function runAccountId() {
+          return get(/databases/$(database)/documents/testRuns/$(runId)).data.accountId;
+        }
+
+        // Anyone holding the run link can read its thread.
+        allow read: if true;
+
+        allow create: if request.resource.data.runId == runId
+          && request.resource.data.accountId == runAccountId()
+          && (canEdit(runAccountId()) || request.resource.data.direction == 'tester_to_pm');
+
+        allow update: if canEdit(runAccountId())
+          || onlyChanges(['readByTester', 'hasReply']);
+
+        allow delete: if canEdit(runAccountId());
+      }
+    }
+
+    // PM inbox: collection-group query across all runs, filtered by accountId.
+    match /{path=**}/messages/{messageId} {
+      allow read: if isMember(resource.data.accountId);
+    }
+
+    // ─── Mobile upload hand-off ─────────────────────────────────────────────
+    // Desktop shows a QR code with a random token; the phone uploads a file and
+    // writes its URL here; the desktop is listening on that one document.
+
+    match /mobileUploads/{token} {
+      allow get: if token.size() >= 32;
+      allow create, update: if token.size() >= 32
+        && request.resource.data.keys().hasOnly(['url', 'createdAt'])
+        && request.resource.data.url is string
+        && request.resource.data.url.matches('https://firebasestorage\\.googleapis\\.com/.*');
+    }
+
+    // ─── Legacy ─────────────────────────────────────────────────────────────
+    // Old flat message collection — copied into testRuns/{id}/messages by
+    // scripts/migrate-phase1.mjs. Kept readable to members until deleted.
+
+    match /testerMessages/{messageId} {
+      allow read: if isMember(resource.data.accountId);
+      allow write: if false;
+    }
+
+    // Everything else: denied by default.
+  }
+}

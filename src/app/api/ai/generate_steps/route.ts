@@ -1,10 +1,49 @@
 import { NextResponse } from 'next/server';
+import { requireMember, errorResponse } from '@/lib/server-auth';
+import { getAccountSecrets } from '@/lib/secrets';
 
-export const runtime = 'edge';
+// Design images may only be fetched from these hosts (Figma exports and our
+// own Firebase Storage). Stops this route being used to fetch arbitrary URLs.
+const ALLOWED_IMAGE_HOSTS = [
+  'firebasestorage.googleapis.com',
+  'storage.googleapis.com',
+  'figma-alpha-api.s3.us-west-2.amazonaws.com',
+];
+
+function isAllowedImageUrl(raw: unknown): boolean {
+  if (typeof raw !== 'string') return false;
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== 'https:') return false;
+    return ALLOWED_IMAGE_HOSTS.includes(url.hostname) || url.hostname.endsWith('.figma.com');
+  } catch {
+    return false;
+  }
+}
 
 export async function POST(req: Request) {
-  const { frames, scriptName, description } = await req.json();
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const { frames, scriptName, description, accountId } = await req.json();
+
+  try {
+    await requireMember(req, accountId, 'member');
+  } catch (err) {
+    return errorResponse(err);
+  }
+
+  if (!Array.isArray(frames) || frames.length === 0 || frames.length > 20) {
+    return NextResponse.json({ error: 'Select between 1 and 20 frames.' }, { status: 400 });
+  }
+  if (!frames.every((f: { imageUrl?: unknown }) => isAllowedImageUrl(f?.imageUrl))) {
+    return NextResponse.json({ error: 'One or more frame images come from an unsupported address.' }, { status: 400 });
+  }
+
+  let apiKey = process.env.ANTHROPIC_API_KEY || '';
+  try {
+    const { aiToken } = await getAccountSecrets(accountId);
+    if (aiToken) apiKey = aiToken;
+  } catch (err) {
+    console.warn('Could not load workspace aiToken — using server env key', err);
+  }
 
   if (!apiKey) return NextResponse.json({ error: 'Missing Anthropic API Key' }, { status: 500 });
 

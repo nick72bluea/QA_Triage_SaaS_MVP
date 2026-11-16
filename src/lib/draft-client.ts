@@ -1,4 +1,5 @@
 import { AIDraftedTicket } from '@/types';
+import { authFetch } from '@/lib/api-client';
 
 interface StreamCallbacks {
   onTicketStarted: (id: string) => void;
@@ -12,12 +13,15 @@ export async function streamDrafts(
   callbacks: StreamCallbacks,
   accountId?: string
 ): Promise<void> {
-  const res = await fetch('/api/draft-tickets', {
+  const res = await authFetch('/api/draft-tickets', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ tickets, accountId }),
   });
 
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Drafting failed (${res.status})`);
+  }
   if (!res.body) throw new Error('No response stream');
 
   const reader = res.body.getReader();
@@ -55,9 +59,8 @@ export async function streamDrafts(
 }
 
 export async function refineDraft(draft: AIDraftedTicket, refinement: string, accountId?: string): Promise<AIDraftedTicket> {
-  const res = await fetch('/api/refine-ticket', {
+  const res = await authFetch('/api/refine-ticket', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ draft, refinement, accountId }),
   });
   

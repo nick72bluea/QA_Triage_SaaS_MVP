@@ -14,6 +14,7 @@ import {
   BRAND_COLOR_PRESETS_SECONDARY,
 } from "@/types/workspace";
 import { uploadLogo } from "@/lib/uploadLogo";
+import { authFetch } from "@/lib/api-client";
 import {
   collection, query, where, getDocs, setDoc, deleteDoc,
   doc as fsDoc, writeBatch, getDoc,
@@ -244,16 +245,19 @@ export default function WorkspaceSettingsPage() {
         const snap = await getDocs(q);
         setMembers(snap.docs.map((d) => d.data() as MemberDoc));
 
-        const invQ = query(
-          collection(db, "invites"),
-          where("accountId", "==", currentAccountId)
-        );
-        const invSnap = await getDocs(invQ);
-        const now = Date.now();
-        const valid = invSnap.docs
-          .map((d) => d.data() as InviteDoc)
-          .filter((inv) => inv.expiresAt > now);
-        setInvite(valid.length > 0 ? valid[0] : null);
+        // Only admins and owners can see or manage invite links.
+        if (currentRole === "owner" || currentRole === "admin") {
+          const invQ = query(
+            collection(db, "invites"),
+            where("accountId", "==", currentAccountId)
+          );
+          const invSnap = await getDocs(invQ);
+          const now = Date.now();
+          const valid = invSnap.docs
+            .map((d) => d.data() as InviteDoc)
+            .filter((inv) => inv.expiresAt > now);
+          setInvite(valid.length > 0 ? valid[0] : null);
+        }
       } catch (err) {
         console.error("Failed to load members", err);
       } finally {
@@ -261,7 +265,7 @@ export default function WorkspaceSettingsPage() {
       }
     };
     load();
-  }, [currentAccountId]);
+  }, [currentAccountId, currentRole]);
 
   useEffect(() => {
     if (!settings) return;
@@ -406,11 +410,26 @@ export default function WorkspaceSettingsPage() {
     if (!formData || !isDirty || isSaving) return;
     setIsSaving(true);
     try {
+      // Tokens go to the server, never into the readable settings doc.
+      const secretPatch: { jiraToken?: string; aiToken?: string } = {};
+      if (formData.jiraToken.trim()) secretPatch.jiraToken = formData.jiraToken.trim();
+      if (formData.aiToken.trim()) secretPatch.aiToken = formData.aiToken.trim();
+      if (Object.keys(secretPatch).length > 0) {
+        const res = await authFetch("/api/workspace/secrets", {
+          method: "POST",
+          body: JSON.stringify({ accountId, ...secretPatch }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || "Couldn't save tokens");
+        }
+      }
       await save(formData);
+      setFormData((prev) => (prev ? { ...prev, jiraToken: "", aiToken: "" } : prev));
       showToast("Settings saved");
     } catch (err) {
       console.error(err);
-      showToast("Save failed", "error");
+      showToast(err instanceof Error && err.message ? err.message : "Save failed", "error");
     } finally {
       setIsSaving(false);
     }
@@ -838,7 +857,7 @@ export default function WorkspaceSettingsPage() {
                   <div className="field-label-desc">Encrypted at rest.</div>
                 </div>
                 <div className="field-input">
-                  <input className="input" type="password" value={formData.jiraToken} onChange={(e) => set("jiraToken", e.target.value)} placeholder="••••••••••••" />
+                  <input className="input" type="password" autoComplete="off" value={formData.jiraToken} onChange={(e) => set("jiraToken", e.target.value)} placeholder={settings?.jiraTokenSet ? "Saved — type a new token to replace it" : "Paste your Jira API token"} />
                 </div>
               </div>
               <div className="field-row">
@@ -874,7 +893,7 @@ export default function WorkspaceSettingsPage() {
               <div className="field-row">
                 <div><div className="field-label-name">API key</div></div>
                 <div className="field-input">
-                  <input className="input" type="password" value={formData.aiToken} onChange={(e) => set("aiToken", e.target.value)} placeholder="sk-ant-•••••••" />
+                  <input className="input" type="password" autoComplete="off" value={formData.aiToken} onChange={(e) => set("aiToken", e.target.value)} placeholder={settings?.aiTokenSet ? "Saved — type a new key to replace it" : "sk-ant-…"} />
                 </div>
               </div>
               <div className="field-row">

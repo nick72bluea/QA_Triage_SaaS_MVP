@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { collection, onSnapshot, doc, updateDoc, addDoc, query, orderBy, where, deleteDoc } from 'firebase/firestore';
+import { collection, collectionGroup, onSnapshot, doc, updateDoc, addDoc, query, orderBy, where, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -10,6 +10,7 @@ import { TestResult, TestRunData, ProjectAggregate, AggregatedStep, TesterResult
 import { groupRunsByProject, aggregateProject, aggregateProjectByPlatform, colorForTester, initialsFor } from '@/lib/triageAggregation';
 import { getProjectPlatforms, projectHasPlatforms } from '@/lib/platforms';
 import { streamDrafts, refineDraft } from '@/lib/draft-client';
+import { authFetch } from '@/lib/api-client';
 import { formatRelative } from '@/lib/format';
 import { PageHead } from '@/components/PageHead';
 import { QRCodeSVG } from 'qrcode.react';
@@ -212,7 +213,8 @@ export default function PMTriageDashboard() {
   useEffect(() => {
     if (!currentAccountId) return;
     const q = query(
-      collection(db, 'testerMessages'),
+      // Messages live under each run: testRuns/{runId}/messages.
+      collectionGroup(db, 'messages'),
       where('accountId', '==', currentAccountId),
       orderBy('createdAt', 'desc')
     );
@@ -347,7 +349,7 @@ export default function PMTriageDashboard() {
   
     try {
       await Promise.all(unreadReplies.map(r =>
-        updateDoc(doc(db, 'testerMessages', r.id), { readByPm: true })
+        updateDoc(doc(db, 'testRuns', r.runId, 'messages', r.id), { readByPm: true })
       ));
     } catch (err) {
       setAllMessages(prev => prev.map(m => {
@@ -536,7 +538,10 @@ export default function PMTriageDashboard() {
         setDraftingModal(prev => ({ ...prev, tickets: prev.tickets.map(t => t.id === id ? { ...t, status: 'queued' } : t) }));
       },
       onDone: () => {},
-    }, currentAccountId || undefined);
+    }, currentAccountId || undefined).catch((err: Error) => {
+      alert(err.message);
+      setDraftingModal(prev => ({ ...prev, tickets: prev.tickets.map(t => t.status === 'drafting' ? { ...t, status: 'queued' } : t) }));
+    });
   };
 
   const handleRefine = async (instruction: string) => {
@@ -577,9 +582,8 @@ export default function PMTriageDashboard() {
     setDraftingModal(prev => ({ ...prev, pushing: true }));
 
     try {
-      const res = await fetch('/api/push-to-jira', {
+      const res = await authFetch('/api/push-to-jira', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tickets: approvedTickets, accountId: currentAccountId }),
       });
 
@@ -787,7 +791,7 @@ export default function PMTriageDashboard() {
   };
 
   const openPMQrScanner = (runId: string, stepId: string, currentResult: ExtendedTestResult | undefined) => {
-    const token = Math.random().toString(36).substring(2, 15);
+    const token = crypto.randomUUID();
     setUploadToken(token); setQrTarget({ runId, stepId, currentResult });
     setUploadUrl(`${window.location.origin}/mobile-upload/${token}`); setQrModalOpen(true);
   };
@@ -865,7 +869,7 @@ export default function PMTriageDashboard() {
         const mailtoUrl = `mailto:${contactModal.tester.email || ''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
         window.location.href = mailtoUrl;
       } else {
-        await addDoc(collection(db, 'testerMessages'), {
+        await addDoc(collection(db, 'testRuns', contactModal.runId, 'messages'), {
           runId: contactModal.runId,
           projectName: activeProject?.projectName || '',
           testCycle: activeProject?.testCycle || null,
@@ -903,7 +907,7 @@ export default function PMTriageDashboard() {
     try {
       const parentMessage = contactModal.activeThread.root;
   
-      await addDoc(collection(db, 'testerMessages'), {
+      await addDoc(collection(db, 'testRuns', parentMessage.runId, 'messages'), {
         runId: parentMessage.runId,
         projectName: parentMessage.projectName,
         testCycle: parentMessage.testCycle || null,

@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:rules": "firebase emulators:exec --only firestore,storage --project demo-proofdeck \"node --test tests/rules.test.mjs\""
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
@@ -23,6 +24,7 @@
     "recharts": "^3.8.1"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@types/node": "^20",
     "@types/papaparse": "^5.5.2",
     "@types/react": "^19",
