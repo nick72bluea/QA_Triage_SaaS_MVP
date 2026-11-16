@@ -348,6 +348,9 @@ export default function PMHomeDashboard() {
   const [greeting, setGreeting] = useState('Good morning'); // stable default matches server
 
   const [allRuns, setAllRuns] = useState<TestRunData[]>([]);
+  // Which account's runs have arrived — avoids flashing "No projects yet" before the first load.
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
+  const runsLoaded = loadedFor !== null && loadedFor === currentAccountId;
   const [searchQuery, setSearchQuery] = useState('');
   const [listFilter, setListFilter] = useState<'all' | 'need' | 'active' | 'done'>('all');
   const [toastMsg, setToastMsg] = useState('');
@@ -394,6 +397,7 @@ export default function PMHomeDashboard() {
     const q = query(collection(db, 'testRuns'), where('accountId', '==', currentAccountId));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const runsData = snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as TestRunData[];
+      setLoadedFor(currentAccountId);
 
       setAllRuns(prev => {
         if (prev.length !== runsData.length) return runsData;
@@ -838,6 +842,10 @@ export default function PMHomeDashboard() {
                 Manage Project
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
               </button>
+            </div>
+          ) : !runsLoaded ? (
+            <div className="module resume-module" aria-busy="true">
+              <div className="module-label">Loading projects…</div>
             </div>
           ) : (
             <div className="module resume-module">

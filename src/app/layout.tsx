@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./base.css";
+import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { BrandingProvider } from "@/components/BrandingProvider";
 import { AppLayoutContent } from "@/components/AppLayoutContent";

@@ -2,8 +2,7 @@
    so removing MUI changes nothing visually. Page components set their own
    fonts and colours; BrandingProvider sets the design tokens on <html>.
 
-   Note: globals.css is NOT loaded (it never was). Loading it would change
-   layouts — see the phase 4 notes before importing it. */
+   Design tokens (colours, fonts, radii) live in globals.css. */
 
 html {
   -webkit-font-smoothing: antialiased;

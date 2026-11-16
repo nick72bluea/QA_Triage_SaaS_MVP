@@ -2234,7 +2234,7 @@ export default function TesterExecutionEngine() {
                       </div>
                       <div className="pct-text">
                         <h3 className="pct-headline">About <em>{perStepLabel}</em> per step</h3>
-                        <p className="pct-sub">Your average across {totalStepsCount} step{totalStepsCount === 1 ? '' : 's'}{runData.testCycle ? ` · ${runData.testCycle}` : ''}</p>
+                        <p className="pct-sub">Your average across {totalStepsCount} step{totalStepsCount === 1 ? '' : 's'}{runData.testCycle ? ` · ${/^\d+$/.test(runData.testCycle) ? `Cycle ${runData.testCycle}` : runData.testCycle}` : ''}</p>
                       </div>
                     </div>
 
