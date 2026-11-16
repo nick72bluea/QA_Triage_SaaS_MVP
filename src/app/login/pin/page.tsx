@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
+import { postLoginPath } from "@/lib/post-login";
 
 const PinStyles = React.memo(() => (
   <style
@@ -131,7 +132,7 @@ export default function PinPage() {
     // If user is no longer authenticated, kick back to login
     if (!loading && !user) router.replace("/login");
     // If user has no PIN set, they shouldn't be here
-    if (!loading && profile && !profile.hasPinSet) router.replace("/home");
+    if (!loading && profile && !profile.hasPinSet) router.replace(postLoginPath());
   }, [loading, user, profile, router]);
 
   const tryVerify = async (candidate: string) => {
@@ -142,7 +143,7 @@ export default function PinPage() {
     try {
       const ok = await verifyUserPin(candidate);
       if (ok) {
-        router.replace("/home");
+        router.replace(postLoginPath());
       } else {
         setShake(true);
         setError("Incorrect PIN");

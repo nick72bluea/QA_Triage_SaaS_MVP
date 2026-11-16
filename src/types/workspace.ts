@@ -36,6 +36,8 @@ export interface WorkspaceSettings {
   slackConnected: boolean;
   slackChannel: string;
   figmaConnected: boolean;
+  figmaToken: string; // form-only, like jiraToken
+  figmaTokenSet?: boolean;
   figmaFileName: string;
   figmaFrameCount: number;
   figmaSyncedAt: any;
@@ -81,6 +83,7 @@ export const WORKSPACE_DEFAULTS: WorkspaceSettings = {
   slackConnected: false,
   slackChannel: "#qa-alerts",
   figmaConnected: false,
+  figmaToken: "",
   figmaFileName: "",
   figmaFrameCount: 0,
   figmaSyncedAt: null,

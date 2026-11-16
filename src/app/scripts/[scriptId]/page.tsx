@@ -164,7 +164,7 @@ export default function ScriptBuilderPage() {
     if (!figmaUrl.trim()) return;
     setIsFetchingFigma(true);
     try {
-      const res = await fetch('/api/figma/fetch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fileUrl: figmaUrl }) });
+      const res = await authFetch('/api/figma/fetch', { method: 'POST', body: JSON.stringify({ fileUrl: figmaUrl, accountId: currentAccountId }) });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       setFigmaFrames(data.frames); setFigmaFileName(data.fileName); setSelectedFrames([]);
@@ -178,7 +178,8 @@ export default function ScriptBuilderPage() {
 
   const handleAIForkClick = () => {
     if (!figmaConnected) {
-      window.location.href = '/api/figma/auth';
+      // Figma is connected with an access token saved in workspace settings.
+      window.location.href = '/admin/settings#integrations';
     } else {
       setIsAIOpen(true);
     }

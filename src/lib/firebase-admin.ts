@@ -5,6 +5,7 @@
 import { initializeApp, getApps, cert, type App } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
+import { getStorage } from 'firebase-admin/storage';
 
 function getAdminApp(): App {
   const existing = getApps()[0];
@@ -33,4 +34,12 @@ export function adminAuth() {
 
 export function adminDb() {
   return getFirestore(getAdminApp());
+}
+
+export function adminBucket() {
+  const name =
+    process.env.FIREBASE_STORAGE_BUCKET ||
+    process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ||
+    'uat-platform-69e27.firebasestorage.app';
+  return getStorage(getAdminApp()).bucket(name);
 }

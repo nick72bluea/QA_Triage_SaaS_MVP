@@ -127,7 +127,13 @@ const getMediaType = (url: string) => {
 
 export default function PMTriageDashboard() {
   const router = useRouter();
-  const { currentAccountId } = useAuth();
+  const { currentAccountId, canEdit } = useAuth();
+  // Viewers can browse the board but not change anything.
+  const blockIfViewOnly = () => {
+    if (canEdit) return false;
+    alert("You have view-only access to this workspace.");
+    return true;
+  };
 
   const [hydrated, setHydrated] = useState(false);
   const [currentYear, setCurrentYear] = useState('');
@@ -440,6 +446,7 @@ export default function PMTriageDashboard() {
   };
 
   const commitNonJiraTriage = async () => {
+    if (blockIfViewOnly()) return;
     setDraftingModal(prev => ({ ...prev, pushing: true }));
     try {
       const toSave = { ...pendingTriage };
@@ -468,6 +475,7 @@ export default function PMTriageDashboard() {
 
   // 8a: Update Jira open drafting modal
   const openDraftingModal = async () => {
+    if (blockIfViewOnly()) return;
     const ticketed = Object.entries(pendingTriage).filter(([_, p]) => p.action === 'Ticketed');
     if (ticketed.length === 0) return;
 
@@ -545,6 +553,7 @@ export default function PMTriageDashboard() {
   };
 
   const handleRefine = async (instruction: string) => {
+    if (blockIfViewOnly()) return;
     if (!draftingModal.activeTicketId) return;
     const activeTicket = draftingModal.tickets.find(t => t.id === draftingModal.activeTicketId);
     if (!activeTicket || activeTicket.status === 'drafting') return;
@@ -576,6 +585,7 @@ export default function PMTriageDashboard() {
   };
 
   const handleFinalPush = async () => {
+    if (blockIfViewOnly()) return;
     const approvedTickets = draftingModal.tickets.filter(t => t.approved);
     if (approvedTickets.length === 0) return;
 
@@ -779,6 +789,7 @@ export default function PMTriageDashboard() {
   }, [draftingModal.open, draftingModal.tickets]);
 
   const handlePMFileUpload = async (runId: string, stepId: string, currentResult: ExtendedTestResult | undefined, e: React.ChangeEvent<HTMLInputElement>) => {
+    if (blockIfViewOnly()) return;
     const file = e.target.files?.[0];
     if (!file) return;
     setUploadingStep(`${runId}_${stepId}`);
@@ -847,6 +858,7 @@ export default function PMTriageDashboard() {
   };
 
   const handleSendMessage = async () => {
+    if (blockIfViewOnly()) return;
     if (!contactModal || !contactMessage.trim()) return;
     setIsSendingMessage(true);
   
@@ -901,6 +913,7 @@ export default function PMTriageDashboard() {
   };
 
   const handleSendReplyFromThread = async () => {
+    if (blockIfViewOnly()) return;
     if (!contactModal || !contactModal.activeThread || !contactMessage.trim()) return;
     setIsSendingMessage(true);
   

@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { authFetch } from "@/lib/api-client";
+import { clearPostLoginPath } from "@/lib/post-login";
 
 type JoinState =
   | "loading"
@@ -29,7 +30,11 @@ export default function JoinPage() {
       try {
         // 1. Public lookup — which workspace is this invite for?
         const preview = await fetch(`/api/invites/preview?token=${encodeURIComponent(token)}`).then((r) => r.json());
-        if (preview.status !== "valid") { setState(preview.status === "expired" ? "expired" : "invalid"); return; }
+        if (preview.status !== "valid") {
+          clearPostLoginPath();
+          setState(preview.status === "expired" ? "expired" : "invalid");
+          return;
+        }
         setWorkspaceName(preview.accountName);
 
         if (!user) { setState("needs_login"); return; }
@@ -37,6 +42,8 @@ export default function JoinPage() {
         // 2. Signed in — the server checks the invite and adds the membership.
         const res = await authFetch("/api/invites/accept", { method: "POST", body: JSON.stringify({ token }) });
         const result = await res.json();
+        // The invite has been handled one way or another — stop redirecting here.
+        clearPostLoginPath();
         if (result.status === "joined" || result.status === "already_member") {
           setState(result.status);
           // Full reload so the app picks up the new workspace membership.
@@ -57,8 +64,8 @@ export default function JoinPage() {
 
   const messages: Record<JoinState, { title: string; body: string; cta?: { label: string; href: string } }> = {
     loading: { title: "Checking invite…", body: "Just a moment." },
-    invalid: { title: "Invalid invite", body: "This invite link doesn't exist or has been revoked." },
-    expired: { title: "Invite expired", body: "This invite link has expired. Ask the workspace owner to generate a new one." },
+    invalid: { title: "Invalid invite", body: "This invite link doesn't exist or has been revoked.", cta: { label: "Go to Proofdeck →", href: "/home" } },
+    expired: { title: "Invite expired", body: "This invite link has expired. Ask the workspace owner to generate a new one.", cta: { label: "Go to Proofdeck →", href: "/home" } },
     already_member: {
       title: "Already a member",
       body: `You're already in ${workspaceName}.`,

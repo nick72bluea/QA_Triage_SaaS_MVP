@@ -82,9 +82,9 @@ service cloud.firestore {
       match /settings/{docId} {
         allow read: if isMember(accountId);
         allow create: if (isMember(accountId) || (signedIn() && accountOwnerId(accountId) == request.auth.uid))
-                      && !request.resource.data.keys().hasAny(['jiraToken', 'aiToken']);
+                      && !request.resource.data.keys().hasAny(['jiraToken', 'aiToken', 'figmaToken']);
         allow update: if isAdmin(accountId)
-                      && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['jiraToken', 'aiToken']);
+                      && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['jiraToken', 'aiToken', 'figmaToken']);
         allow delete: if isOwner(accountId);
       }
 

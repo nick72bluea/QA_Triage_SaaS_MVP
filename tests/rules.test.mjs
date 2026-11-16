@@ -80,6 +80,7 @@ test('secrets are unreadable from the browser, even for owners', async () => {
 
 test('settings cannot store tokens', async () => {
   await assertFails(updateDoc(doc(as('ownerA'), 'accounts', A, 'settings', 'workspace'), { jiraToken: 'x' }));
+  await assertFails(updateDoc(doc(as('ownerA'), 'accounts', A, 'settings', 'workspace'), { figmaToken: 'x' }));
   await assertSucceeds(updateDoc(doc(as('adminA'), 'accounts', A, 'settings', 'workspace'), { workspaceName: 'New' }));
   await assertFails(updateDoc(doc(as('memberA'), 'accounts', A, 'settings', 'workspace'), { workspaceName: 'New' }));
 });

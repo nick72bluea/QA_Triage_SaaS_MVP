@@ -16,8 +16,8 @@ import {
 import { uploadLogo } from "@/lib/uploadLogo";
 import { authFetch } from "@/lib/api-client";
 import {
-  collection, query, where, getDocs, setDoc, deleteDoc,
-  doc as fsDoc, writeBatch, getDoc,
+  collection, query, where, getDocs, setDoc, deleteDoc, updateDoc,
+  doc as fsDoc,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
@@ -211,7 +211,7 @@ GlobalSettingsStyles.displayName = "GlobalSettingsStyles";
 
 export default function WorkspaceSettingsPage() {
   const { settings, loading, save, accountId } = useWorkspaceSettings();
-  const { user, currentAccountId, currentRole, profile, fullSignOut } = useAuth();
+  const { user, currentAccountId, currentRole, profile, fullSignOut, canManage } = useAuth();
 
   const [formData, setFormData] = useState<WorkspaceSettings | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -246,7 +246,7 @@ export default function WorkspaceSettingsPage() {
         setMembers(snap.docs.map((d) => d.data() as MemberDoc));
 
         // Only admins and owners can see or manage invite links.
-        if (currentRole === "owner" || currentRole === "admin") {
+        if (canManage) {
           const invQ = query(
             collection(db, "invites"),
             where("accountId", "==", currentAccountId)
@@ -265,7 +265,7 @@ export default function WorkspaceSettingsPage() {
       }
     };
     load();
-  }, [currentAccountId, currentRole]);
+  }, [currentAccountId, canManage]);
 
   useEffect(() => {
     if (!settings) return;
@@ -325,6 +325,17 @@ export default function WorkspaceSettingsPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const changeRole = async (uid: string, role: "admin" | "member" | "viewer") => {
+    if (!currentAccountId) return;
+    try {
+      await updateDoc(fsDoc(db, "accountMembers", `${currentAccountId}_${uid}`), { role });
+      setMembers((prev) => prev.map((m) => (m.uid === uid ? { ...m, role } : m)));
+      showToast("Role updated");
+    } catch {
+      showToast("Couldn't change role", "error");
+    }
+  };
+
   const removeMember = async (uid: string) => {
     if (!currentAccountId) return;
     setRemovingUid(uid);
@@ -343,24 +354,21 @@ export default function WorkspaceSettingsPage() {
     if (!currentAccountId || !user) return;
     setDeletingWorkspace(true);
     try {
-      const batch = writeBatch(db);
-      // Remove all members
-      const membersQ = query(collection(db, "accountMembers"), where("accountId", "==", currentAccountId));
-      const membersSnap = await getDocs(membersQ);
-      membersSnap.docs.forEach((d) => batch.delete(d.ref));
-      // Remove invites
-      const invitesQ = query(collection(db, "invites"), where("accountId", "==", currentAccountId));
-      const invitesSnap = await getDocs(invitesQ);
-      invitesSnap.docs.forEach((d) => batch.delete(d.ref));
-      // Delete account doc
-      batch.delete(fsDoc(db, "accounts", currentAccountId));
-      // Clear lastAccountId on user
-      batch.update(fsDoc(db, "users", user.uid), { lastAccountId: null });
-      await batch.commit();
-      await fullSignOut();
+      // The server deletes everything: runs, messages, scripts, settings,
+      // secrets, memberships and invites.
+      const res = await authFetch("/api/workspace/delete", {
+        method: "POST",
+        body: JSON.stringify({ accountId: currentAccountId, confirmName: deleteConfirmName }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to delete workspace");
+      }
+      // Reload: you'll land in another workspace (or a fresh one is created).
+      window.location.assign("/home");
     } catch (err) {
       console.error(err);
-      showToast("Failed to delete workspace", "error");
+      showToast(err instanceof Error ? err.message : "Failed to delete workspace", "error");
       setDeletingWorkspace(false);
     }
   };
@@ -398,7 +406,8 @@ export default function WorkspaceSettingsPage() {
       formData.jiraUrl !== settings.jiraUrl ||
       formData.jiraEmail !== settings.jiraEmail ||
       formData.jiraToken !== settings.jiraToken ||
-      formData.jiraProjectKey !== settings.jiraProjectKey
+      formData.jiraProjectKey !== settings.jiraProjectKey ||
+      formData.figmaToken !== settings.figmaToken
     )
       out.push("Integrations");
     return out;
@@ -411,9 +420,10 @@ export default function WorkspaceSettingsPage() {
     setIsSaving(true);
     try {
       // Tokens go to the server, never into the readable settings doc.
-      const secretPatch: { jiraToken?: string; aiToken?: string } = {};
+      const secretPatch: { jiraToken?: string; aiToken?: string; figmaToken?: string } = {};
       if (formData.jiraToken.trim()) secretPatch.jiraToken = formData.jiraToken.trim();
       if (formData.aiToken.trim()) secretPatch.aiToken = formData.aiToken.trim();
+      if (formData.figmaToken.trim()) secretPatch.figmaToken = formData.figmaToken.trim();
       if (Object.keys(secretPatch).length > 0) {
         const res = await authFetch("/api/workspace/secrets", {
           method: "POST",
@@ -425,7 +435,7 @@ export default function WorkspaceSettingsPage() {
         }
       }
       await save(formData);
-      setFormData((prev) => (prev ? { ...prev, jiraToken: "", aiToken: "" } : prev));
+      setFormData((prev) => (prev ? { ...prev, jiraToken: "", aiToken: "", figmaToken: "" } : prev));
       showToast("Settings saved");
     } catch (err) {
       console.error(err);
@@ -565,6 +575,12 @@ export default function WorkspaceSettingsPage() {
             sub="Configure how your workspace looks and behaves — branding, integrations, AI, and team."
           />
 
+          {!canManage && (
+            <p style={{ margin: "0 0 24px", color: "var(--ink-mute, #55524d)" }}>
+              Only workspace owners and admins can change these settings.
+            </p>
+          )}
+          <fieldset disabled={!canManage} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
           {/* WORKSPACE IDENTITY */}
           <section className="section" id="identity">
             <div className="section-head">
@@ -854,7 +870,7 @@ export default function WorkspaceSettingsPage() {
               <div className="field-row">
                 <div>
                   <div className="field-label-name">API token</div>
-                  <div className="field-label-desc">Encrypted at rest.</div>
+                  <div className="field-label-desc">Stored on the server only — never shown again after saving.</div>
                 </div>
                 <div className="field-input">
                   <input className="input" type="password" autoComplete="off" value={formData.jiraToken} onChange={(e) => set("jiraToken", e.target.value)} placeholder={settings?.jiraTokenSet ? "Saved — type a new token to replace it" : "Paste your Jira API token"} />
@@ -867,6 +883,15 @@ export default function WorkspaceSettingsPage() {
                 </div>
                 <div className="field-input">
                   <input className="input" type="text" value={formData.jiraProjectKey || ""} onChange={(e) => set("jiraProjectKey", e.target.value.toUpperCase())} placeholder="QA" style={{ textTransform: "uppercase", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.05em" }} />
+                </div>
+              </div>
+              <div className="field-row">
+                <div>
+                  <div className="field-label-name">Figma access token</div>
+                  <div className="field-label-desc">Lets AI read your design frames. Create one in Figma → Settings → Security → Personal access tokens, with read access to file content.</div>
+                </div>
+                <div className="field-input">
+                  <input className="input" type="password" autoComplete="off" value={formData.figmaToken} onChange={(e) => set("figmaToken", e.target.value)} placeholder={settings?.figmaTokenSet ? "Saved — type a new token to replace it" : "figd_…"} />
                 </div>
               </div>
             </div>
@@ -905,15 +930,17 @@ export default function WorkspaceSettingsPage() {
             </div>
           </section>
 
+          </fieldset>
+
           {/* MEMBERS */}
           <section className="section" id="members">
             <div className="section-head">
               <h2 className="section-title">Members</h2>
-              <p className="section-description">Invite people to your workspace. Everyone joins as a member — owners can promote them later.</p>
+              <p className="section-description">Invite people to your workspace. Everyone joins as a member — admins can change roles below. Viewers can look but not change anything.</p>
             </div>
             <div className="section-card">
-              {/* Invite link box */}
-              <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--line, #e5e2db)" }}>
+              {/* Invite link box — admins and owners only */}
+              {canManage && <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--line, #e5e2db)" }}>
                 <div className="field-label-name" style={{ marginBottom: 8 }}>Invite link</div>
                 <div className="field-label-desc" style={{ marginBottom: 12 }}>Share this link. Anyone with it joins as a member. Links expire after 7 days.</div>
                 {invite ? (
@@ -928,7 +955,7 @@ export default function WorkspaceSettingsPage() {
                     {inviteGenerating ? "Generating…" : "Generate invite link"}
                   </button>
                 )}
-              </div>
+              </div>}
 
               {/* Member list */}
               <div className="member-list">
@@ -943,9 +970,23 @@ export default function WorkspaceSettingsPage() {
                       <div className="member-name">{m.displayName || "—"}</div>
                       <div className="member-email">{m.email}</div>
                     </div>
-                    <span className={`role-badge${m.role === "owner" ? " owner" : m.role === "admin" ? " admin" : ""}`}>{m.role}</span>
+                    {canManage && m.uid !== user?.uid && m.role !== "owner" ? (
+                      <select
+                        className="input"
+                        style={{ width: "auto", padding: "4px 8px", fontSize: 12 }}
+                        value={m.role}
+                        onChange={(e) => changeRole(m.uid, e.target.value as "admin" | "member" | "viewer")}
+                        aria-label={`Role for ${m.displayName || m.email}`}
+                      >
+                        <option value="admin">admin</option>
+                        <option value="member">member</option>
+                        <option value="viewer">viewer</option>
+                      </select>
+                    ) : (
+                      <span className={`role-badge${m.role === "owner" ? " owner" : m.role === "admin" ? " admin" : ""}`}>{m.role}</span>
+                    )}
                     <div className="member-actions">
-                      {m.uid !== user?.uid && (currentRole === "owner" || currentRole === "admin") && m.role !== "owner" && (
+                      {m.uid !== user?.uid && canManage && m.role !== "owner" && (
                         <button
                           className="btn-sm danger"
                           onClick={() => removeMember(m.uid)}
@@ -961,6 +1002,7 @@ export default function WorkspaceSettingsPage() {
             </div>
           </section>
 
+          <fieldset disabled={!canManage} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
           {/* NOTIFICATIONS */}
           <section className="section" id="notifications">
             <div className="section-head">
@@ -982,6 +1024,8 @@ export default function WorkspaceSettingsPage() {
               ))}
             </div>
           </section>
+          </fieldset>
+
           {/* DANGER ZONE */}
           <section className="section" id="danger">
             <div className="section-head">

@@ -6,6 +6,7 @@ import { doc, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { hashPin, isValidPin } from "@/lib/pin";
+import { postLoginPath } from "@/lib/post-login";
 
 const PinStyles = React.memo(() => (
   <style
@@ -144,14 +145,14 @@ export default function SetupPinPage() {
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
-    if (!loading && profile?.hasPinSet) router.replace("/home");
+    if (!loading && profile?.hasPinSet) router.replace(postLoginPath());
   }, [loading, user, profile, router]);
 
   const skip = () => {
     if (typeof window !== "undefined") {
       sessionStorage.setItem("pinSetupDismissed", "1");
     }
-    router.replace("/home");
+    router.replace(postLoginPath());
   };
 
   const triggerShake = () => {
@@ -222,7 +223,7 @@ export default function SetupPinPage() {
         );
         await refreshProfile();
         setStep("done");
-        setTimeout(() => router.replace("/home"), 700);
+        setTimeout(() => router.replace(postLoginPath()), 700);
       } catch (err) {
         console.error("PIN save failed:", err);
         setError("Couldn't save your PIN. Please try again.");

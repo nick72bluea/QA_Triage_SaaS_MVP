@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { completeMagicLinkSignIn } from "@/lib/auth";
+import { postLoginPath } from "@/lib/post-login";
 
 const VerifyStyles = React.memo(() => (
   <style
@@ -86,7 +87,7 @@ export default function VerifyPage() {
         // AuthContext will pick up the user and route appropriately.
         // Give it a beat, then redirect to /home as the post-login destination.
         setTimeout(() => {
-          if (!cancelled) router.replace("/home");
+          if (!cancelled) router.replace(postLoginPath());
         }, 800);
       } catch (err: any) {
         if (cancelled) return;

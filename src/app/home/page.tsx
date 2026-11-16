@@ -338,7 +338,7 @@ HomeStyles.displayName = 'HomeStyles';
 
 export default function PMHomeDashboard() {
   const router = useRouter();
-  const { currentAccountId, profile } = useAuth();
+  const { currentAccountId, profile, canEdit } = useAuth();
   const { settings: workspaceSettings } = useWorkspaceSettings();
 
   // Only gates browser-specific values — NOT the whole UI
@@ -648,6 +648,10 @@ export default function PMHomeDashboard() {
   };
 
   const launchProject = async () => {
+    if (!canEdit) {
+      alert("You have view-only access to this workspace, so you can't launch projects.");
+      return;
+    }
     if (!currentAccountId) { alert('Not authenticated — please reload.'); return; }
     setIsLaunching(true);
     const branding = workspaceSettings ? brandingSnapshotFrom(workspaceSettings) : null;

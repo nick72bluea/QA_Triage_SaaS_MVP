@@ -9,9 +9,11 @@ import { adminDb } from '@/lib/firebase-admin';
 export interface AccountSecrets {
   jiraToken?: string;
   aiToken?: string;
+  figmaToken?: string;
 }
 
-export const SECRET_KEYS = ['jiraToken', 'aiToken'] as const;
+export const SECRET_KEYS = ['jiraToken', 'aiToken', 'figmaToken'] as const;
+type SecretPatch = Partial<Record<(typeof SECRET_KEYS)[number], string | null>>;
 
 export async function getAccountSecrets(accountId: string): Promise<AccountSecrets> {
   const db = adminDb();
@@ -26,13 +28,14 @@ export async function getAccountSecrets(accountId: string): Promise<AccountSecre
   return {
     jiraToken: secrets.jiraToken || legacy.jiraToken || undefined,
     aiToken: secrets.aiToken || legacy.aiToken || undefined,
+    figmaToken: secrets.figmaToken || undefined,
   };
 }
 
 // Pass a string to set a secret, or null to clear it. Omitted keys are untouched.
 export async function setAccountSecrets(
   accountId: string,
-  patch: { jiraToken?: string | null; aiToken?: string | null },
+  patch: SecretPatch,
   uid: string
 ) {
   const db = adminDb();
@@ -52,4 +55,12 @@ export async function setAccountSecrets(
 
   await db.doc(`accounts/${accountId}/private/secrets`).set(secretUpdate, { merge: true });
   await db.doc(`accounts/${accountId}/settings/workspace`).set(settingsUpdate, { merge: true });
+
+  // The script editor watches this doc to know whether Figma is connected.
+  if ('figmaToken' in patch) {
+    await db.doc(`accounts/${accountId}/integrations/figma`).set(
+      { status: settingsUpdate.figmaTokenSet ? 'active' : 'disconnected', updatedAt: FieldValue.serverTimestamp() },
+      { merge: true }
+    );
+  }
 }

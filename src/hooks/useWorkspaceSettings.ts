@@ -52,7 +52,7 @@ export function useWorkspaceSettings(): UseWorkspaceSettingsResult {
         if (snap.exists()) {
           // Merge with defaults so missing fields don't crash UI
           // Token inputs always start empty; *Set flags say whether one is saved.
-          const data = { ...WORKSPACE_DEFAULTS, ...snap.data(), jiraToken: "", aiToken: "" } as WorkspaceSettings;
+          const data = { ...WORKSPACE_DEFAULTS, ...snap.data(), jiraToken: "", aiToken: "", figmaToken: "" } as WorkspaceSettings;
 
           // Backward compat: if old data has brandColor but not the new fields
           if (snap.data().brandColor && !snap.data().brandColorPrimary) {
@@ -63,7 +63,7 @@ export function useWorkspaceSettings(): UseWorkspaceSettingsResult {
         } else {
           // First time — write defaults
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          const { jiraToken, aiToken, ...seed } = WORKSPACE_DEFAULTS;
+          const { jiraToken, aiToken, figmaToken, ...seed } = WORKSPACE_DEFAULTS;
           setDoc(ref, {
             ...seed,
             createdAt: serverTimestamp(),
@@ -100,7 +100,7 @@ export function useWorkspaceSettings(): UseWorkspaceSettingsResult {
       // Secrets never go into the settings doc — they're saved via
       // /api/workspace/secrets. Firestore rules reject them here too.
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { jiraToken, aiToken, jiraTokenSet, aiTokenSet, ...rest } = patch;
+      const { jiraToken, aiToken, figmaToken, jiraTokenSet, aiTokenSet, figmaTokenSet, ...rest } = patch;
       const payload: Record<string, unknown> = { ...rest };
       if (!opts?.silent) {
         payload.updatedAt = serverTimestamp();

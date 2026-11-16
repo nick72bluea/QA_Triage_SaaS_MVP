@@ -27,6 +27,7 @@ import {
   User,
 } from "@/lib/auth";
 import { verifyPin } from "@/lib/pin";
+import { hasPendingInvite, postLoginPath } from "@/lib/post-login";
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
 
@@ -55,6 +56,12 @@ export interface AuthContextValue {
   loading: boolean;
   currentAccountId: string | null;
   currentRole: Role | null;
+  /** owner/admin/member (or super user): may create and change data */
+  canEdit: boolean;
+  /** owner/admin (or super user): may manage settings, members and invites */
+  canManage: boolean;
+  /** Proofdeck super user (custom auth claim) — can see every workspace */
+  isSuperUser: boolean;
   accounts: AccountMembership[];
   pinVerified: boolean;
   switchAccount: (accountId: string) => Promise<void>;
@@ -84,6 +91,8 @@ const isPublicRoute = (path: string | null) => {
 
 // Key used in sessionStorage to remember PIN verification across page refreshes.
 const PIN_VERIFIED_KEY = "pinVerified";
+// Super users looking inside a workspace they aren't a member of (per tab).
+const SUPER_VIEW_KEY = "proofdeck_super_view";
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
@@ -122,7 +131,7 @@ async function getOrCreateUserProfile(user: User): Promise<UserProfile> {
 async function getOrCreateAccount(
   user: User,
   profile: UserProfile
-): Promise<{ accountId: string; role: Role }> {
+): Promise<{ accountId: string; role: Role } | null> {
   const membersQuery = query(
     collection(db, "accountMembers"),
     where("uid", "==", user.uid)
@@ -137,6 +146,10 @@ async function getOrCreateAccount(
     const m = preferred || memberships[0];
     return { accountId: m.accountId, role: m.role };
   }
+
+  // New user arriving from an invite link: don't make them a workspace of
+  // their own — the join page will add them to the inviting one.
+  if (hasPendingInvite()) return null;
 
   // New user — create a new account for them
   const accountRef = doc(collection(db, "accounts"));
@@ -199,6 +212,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [currentAccountId, setCurrentAccountId] = useState<string | null>(null);
   const [currentRole, setCurrentRole] = useState<Role | null>(null);
   const [accounts, setAccounts] = useState<AccountMembership[]>([]);
+  const [isSuperUser, setIsSuperUser] = useState(false);
 
   const [pinVerified, setPinVerifiedState] = useState(false);
 
@@ -228,6 +242,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setCurrentAccountId(null);
           setCurrentRole(null);
           setAccounts([]);
+          setIsSuperUser(false);
           setPinVerifiedState(false);
           if (typeof window !== "undefined") {
             try {
@@ -239,6 +254,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         setUser(firebaseUser);
+        const tokenResult = await firebaseUser.getIdTokenResult();
+        setIsSuperUser(tokenResult.claims.superUser === true);
 
         if (typeof window !== "undefined") {
           try {
@@ -267,21 +284,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           } catch {}
         }
 
-        const { accountId, role } = await getOrCreateAccount(
-          firebaseUser,
-          userProfile
-        );
-        setCurrentAccountId(accountId);
-        setCurrentRole(role);
+        const active = await getOrCreateAccount(firebaseUser, userProfile);
+        setCurrentAccountId(active?.accountId ?? null);
+        setCurrentRole(active?.role ?? null);
 
-        await setDoc(
-          doc(db, "users", firebaseUser.uid),
-          { lastAccountId: accountId },
-          { merge: true }
-        );
+        if (active) {
+          await setDoc(
+            doc(db, "users", firebaseUser.uid),
+            { lastAccountId: active.accountId },
+            { merge: true }
+          );
+        }
 
         const memberships = await getUserMemberships(firebaseUser.uid);
         setAccounts(memberships);
+
+        // Restore a super user's "viewing another workspace" choice after reloads.
+        if (tokenResult.claims.superUser === true) {
+          try {
+            const viewing = sessionStorage.getItem(SUPER_VIEW_KEY);
+            if (viewing && !memberships.some((m) => m.accountId === viewing)) {
+              setCurrentAccountId(viewing);
+              setCurrentRole(null);
+            }
+          } catch {}
+        }
       } catch (err) {
         console.error("Auth state error:", err);
       } finally {
@@ -327,7 +354,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           pathname === "/login/pin" ||
           pathname === "/login/verify")
       ) {
-        return "/home";
+        return postLoginPath();
       }
     }
 
@@ -346,7 +373,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async (accountId: string) => {
       if (!user) return;
       const membership = accounts.find((a) => a.accountId === accountId);
-      if (!membership) throw new Error("Not a member of that account");
+      if (!membership) {
+        // Super users can look inside any workspace without being a member.
+        // Not remembered as lastAccountId — next sign-in returns to their own.
+        if (!isSuperUser) throw new Error("Not a member of that account");
+        try { sessionStorage.setItem(SUPER_VIEW_KEY, accountId); } catch {}
+        setCurrentAccountId(accountId);
+        setCurrentRole(null);
+        return;
+      }
+      try { sessionStorage.removeItem(SUPER_VIEW_KEY); } catch {}
       setCurrentAccountId(accountId);
       setCurrentRole(membership.role);
       await setDoc(
@@ -355,7 +391,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         { merge: true }
       );
     },
-    [user, accounts]
+    [user, accounts, isSuperUser]
   );
 
   const verifyUserPin = useCallback(
@@ -407,12 +443,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (snap.exists()) setProfile(snap.data() as UserProfile);
   }, [user]);
 
+  const canEdit = isSuperUser || currentRole === "owner" || currentRole === "admin" || currentRole === "member";
+  const canManage = isSuperUser || currentRole === "owner" || currentRole === "admin";
+
   const value: AuthContextValue = {
     user,
     profile,
     loading,
     currentAccountId,
     currentRole,
+    canEdit,
+    canManage,
+    isSuperUser,
     accounts,
     pinVerified,
     switchAccount,

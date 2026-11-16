@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { postLoginPath, rememberPostLoginPath } from "@/lib/post-login";
 import {
   sendMagicLink,
   signInWithGoogle,
@@ -202,6 +203,11 @@ LoginStyles.displayName = "LoginStyles";
 
 export default function LoginPage() {
   const router = useRouter();
+
+  // e.g. /login?next=/join/abc — remember it so we can return after sign-in.
+  useEffect(() => {
+    rememberPostLoginPath(new URLSearchParams(window.location.search).get("next"));
+  }, []);
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
@@ -248,7 +254,7 @@ export default function LoginPage() {
     setOauthLoading("google");
     try {
       await signInWithGoogle();
-      router.replace("/home");
+      router.replace(postLoginPath());
     } catch (err: any) {
       if (err?.code !== "auth/popup-closed-by-user") {
         setError("Google sign-in failed. Please try again.");
@@ -264,7 +270,7 @@ export default function LoginPage() {
     setOauthLoading("microsoft");
     try {
       await signInWithMicrosoft();
-      router.replace("/home");
+      router.replace(postLoginPath());
     } catch (err: any) {
       if (err?.code !== "auth/popup-closed-by-user") {
         setError("Microsoft sign-in failed. Please try again.");

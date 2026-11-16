@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useWorkspaceSettings } from "@/hooks/useWorkspaceSettings";
 import { useAuth } from "@/contexts/AuthContext";
-import { doc, collection, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, collection, setDoc, getDocs, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 // Sidebar — persistent left rail. Reads workspaceName + logoUrl from the
@@ -141,9 +141,26 @@ function getActiveHref(pathname: string | null): string | null {
 export function Sidebar() {
   const pathname = usePathname();
   const { settings } = useWorkspaceSettings();
-  const { user, profile, signOut, accounts, currentAccountId, switchAccount } = useAuth();
-
+  const { user, profile, signOut, accounts, currentAccountId, switchAccount, isSuperUser } = useAuth();
   const [popoverOpen, setPopoverOpen] = useState(false);
+  const [otherWorkspaces, setOtherWorkspaces] = useState<{ id: string; name: string }[]>([]);
+
+  // Super users: list every workspace they're not a member of.
+  useEffect(() => {
+    if (!popoverOpen || !isSuperUser) return;
+    getDocs(collection(db, "accounts"))
+      .then((snap) => {
+        const mine = new Set(accounts.map((a) => a.accountId));
+        setOtherWorkspaces(
+          snap.docs
+            .filter((d) => !mine.has(d.id))
+            .map((d) => ({ id: d.id, name: (d.data().name as string) || d.id }))
+            .sort((x, y) => x.name.localeCompare(y.name))
+        );
+      })
+      .catch((err) => console.error("Couldn't load all workspaces", err));
+  }, [popoverOpen, isSuperUser, accounts]);
+
   const [showNewWsForm, setShowNewWsForm] = useState(false);
   const [newWsName, setNewWsName] = useState("");
   const [creatingWs, setCreatingWs] = useState(false);
@@ -276,6 +293,28 @@ export function Sidebar() {
                 </button>
               );
             })}
+
+            {isSuperUser && otherWorkspaces.length > 0 && (
+              <>
+                <div className="sidebar-popover-label">All workspaces · super user</div>
+                {otherWorkspaces.map((w) => {
+                  const isActive = w.id === currentAccountId;
+                  return (
+                    <button
+                      key={w.id}
+                      className={`sidebar-ws-item${isActive ? " active" : ""}`}
+                      onClick={async () => {
+                        if (!isActive) { await switchAccount(w.id); setPopoverOpen(false); window.location.href = "/home"; }
+                      }}
+                    >
+                      <div className="sidebar-ws-dot" />
+                      <span className="sidebar-ws-name">{w.name}</span>
+                      <span className="sidebar-ws-role">view</span>
+                    </button>
+                  );
+                })}
+              </>
+            )}
 
             {/* New workspace form or button */}
             {showNewWsForm ? (
